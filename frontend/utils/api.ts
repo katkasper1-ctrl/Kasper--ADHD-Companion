@@ -124,4 +124,10 @@ export const api = {
   createStudySession: (data: any) => apiRequest('/study-sessions', { method: 'POST', body: JSON.stringify(data) }),
   getStudyStats: () => apiRequest('/study-sessions/stats'),
   deleteStudySession: (id: string) => apiRequest(`/study-sessions/${id}`, { method: 'DELETE' }),
+
+  // Notes
+  getNotes: () => apiRequest('/notes'),
+  createNote: (data: any) => apiRequest('/notes', { method: 'POST', body: JSON.stringify(data) }),
+  updateNote: (id: string, data: any) => apiRequest(`/notes/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteNote: (id: string) => apiRequest(`/notes/${id}`, { method: 'DELETE' }),
 };

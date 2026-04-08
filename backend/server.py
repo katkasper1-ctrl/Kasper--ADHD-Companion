@@ -288,6 +288,31 @@ class StudySessionCreate(BaseModel):
     topic: str
     notes: Optional[str] = ""
 
+class Note(BaseModel):
+    note_id: str
+    user_id: str
+    title: str
+    content: str
+    color: str = "#FFD700"
+    pinned: bool = False
+    tags: List[str] = []
+    created_at: datetime
+    updated_at: datetime
+
+class NoteCreate(BaseModel):
+    title: str
+    content: str
+    color: Optional[str] = "#FFD700"
+    pinned: Optional[bool] = False
+    tags: Optional[List[str]] = []
+
+class NoteUpdate(BaseModel):
+    title: Optional[str] = None
+    content: Optional[str] = None
+    color: Optional[str] = None
+    pinned: Optional[bool] = None
+    tags: Optional[List[str]] = None
+
 # ============= HELPERS =============
 
 def hash_password(password: str) -> str:
@@ -1462,6 +1487,73 @@ async def delete_study_session(session_id: str, authorization: Optional[str] = H
         raise HTTPException(status_code=404, detail="Study session not found")
     
     return {"message": "Study session deleted"}
+
+# ============= NOTES ENDPOINTS =============
+
+@api_router.post("/notes", response_model=Note)
+async def create_note(note_data: NoteCreate, authorization: Optional[str] = Header(None), request: Request = None):
+    """Create a new note"""
+    user_id = await get_current_user(authorization, request)
+    
+    now = datetime.now(timezone.utc)
+    note_id = f"note_{uuid.uuid4().hex[:12]}"
+    note = {
+        "note_id": note_id,
+        "user_id": user_id,
+        "title": note_data.title,
+        "content": note_data.content,
+        "color": note_data.color or "#FFD700",
+        "pinned": note_data.pinned if note_data.pinned is not None else False,
+        "tags": note_data.tags or [],
+        "created_at": now,
+        "updated_at": now
+    }
+    
+    await db.notes.insert_one(note)
+    return Note(**note)
+
+@api_router.get("/notes", response_model=List[Note])
+async def get_notes(authorization: Optional[str] = Header(None), request: Request = None):
+    """Get all notes (pinned first, then by updated_at)"""
+    user_id = await get_current_user(authorization, request)
+    
+    notes = await db.notes.find({"user_id": user_id}, {"_id": 0}).to_list(1000)
+    
+    # Sort: pinned first, then by updated_at descending
+    sorted_notes = sorted(notes, key=lambda x: (not x.get("pinned", False), -x["updated_at"].timestamp()))
+    
+    return [Note(**note) for note in sorted_notes]
+
+@api_router.put("/notes/{note_id}", response_model=Note)
+async def update_note(note_id: str, note_data: NoteUpdate, authorization: Optional[str] = Header(None), request: Request = None):
+    """Update a note"""
+    user_id = await get_current_user(authorization, request)
+    
+    note = await db.notes.find_one({"note_id": note_id, "user_id": user_id}, {"_id": 0})
+    if not note:
+        raise HTTPException(status_code=404, detail="Note not found")
+    
+    update_fields = {k: v for k, v in note_data.dict().items() if v is not None}
+    update_fields["updated_at"] = datetime.now(timezone.utc)
+    
+    await db.notes.update_one(
+        {"note_id": note_id},
+        {"$set": update_fields}
+    )
+    
+    updated = await db.notes.find_one({"note_id": note_id}, {"_id": 0})
+    return Note(**updated)
+
+@api_router.delete("/notes/{note_id}")
+async def delete_note(note_id: str, authorization: Optional[str] = Header(None), request: Request = None):
+    """Delete a note"""
+    user_id = await get_current_user(authorization, request)
+    
+    result = await db.notes.delete_one({"note_id": note_id, "user_id": user_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Note not found")
+    
+    return {"message": "Note deleted"}
 
 # ============= AI ENDPOINTS =============
 
