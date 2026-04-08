@@ -100,4 +100,10 @@ export const api = {
   getHydrationStats: () => apiRequest('/hydration/stats'),
   setHydrationGoal: (daily_goal_ml: number) => apiRequest('/hydration/goal', { method: 'POST', body: JSON.stringify({ daily_goal_ml }) }),
   deleteHydrationLog: (id: string) => apiRequest(`/hydration/${id}`, { method: 'DELETE' }),
+
+  // Exercise
+  logExercise: (data: any) => apiRequest('/exercise/log', { method: 'POST', body: JSON.stringify(data) }),
+  getTodayExercise: () => apiRequest('/exercise/today'),
+  getExerciseStats: () => apiRequest('/exercise/stats'),
+  deleteExerciseLog: (id: string) => apiRequest(`/exercise/${id}`, { method: 'DELETE' }),
 };

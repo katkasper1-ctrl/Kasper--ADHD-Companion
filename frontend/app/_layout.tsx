@@ -39,6 +39,7 @@ export default function RootLayout() {
       <Stack.Screen name="birthdays" />
       <Stack.Screen name="routines" />
       <Stack.Screen name="hydration" />
+      <Stack.Screen name="exercise" />
     </Stack>
   );
 }

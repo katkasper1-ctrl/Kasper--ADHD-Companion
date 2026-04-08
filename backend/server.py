@@ -202,6 +202,24 @@ class HydrationGoal(BaseModel):
 class HydrationGoalCreate(BaseModel):
     daily_goal_ml: int
 
+class Exercise(BaseModel):
+    exercise_id: str
+    user_id: str
+    type: str  # Walking, Running, Cycling, Yoga, etc.
+    duration_minutes: int
+    intensity: str  # light, moderate, intense
+    calories: Optional[int] = None
+    timestamp: datetime
+    date: str  # YYYY-MM-DD
+    notes: Optional[str] = ""
+
+class ExerciseCreate(BaseModel):
+    type: str
+    duration_minutes: int
+    intensity: str = "moderate"
+    calories: Optional[int] = None
+    notes: Optional[str] = ""
+
 # ============= HELPERS =============
 
 def hash_password(password: str) -> str:
@@ -996,6 +1014,105 @@ async def delete_hydration_log(hydration_id: str, authorization: Optional[str] =
         raise HTTPException(status_code=404, detail="Hydration log not found")
     
     return {"message": "Log deleted"}
+
+# ============= EXERCISE ENDPOINTS =============
+
+@api_router.post("/exercise/log", response_model=Exercise)
+async def log_exercise(exercise_data: ExerciseCreate, authorization: Optional[str] = Header(None), request: Request = None):
+    """Log an exercise session"""
+    user_id = await get_current_user(authorization, request)
+    
+    now = datetime.now(timezone.utc)
+    exercise_id = f"exercise_{uuid.uuid4().hex[:12]}"
+    exercise = {
+        "exercise_id": exercise_id,
+        "user_id": user_id,
+        "type": exercise_data.type,
+        "duration_minutes": exercise_data.duration_minutes,
+        "intensity": exercise_data.intensity,
+        "calories": exercise_data.calories,
+        "timestamp": now,
+        "date": now.strftime("%Y-%m-%d"),
+        "notes": exercise_data.notes or ""
+    }
+    
+    await db.exercises.insert_one(exercise)
+    return Exercise(**exercise)
+
+@api_router.get("/exercise/today")
+async def get_today_exercise(authorization: Optional[str] = Header(None), request: Request = None):
+    """Get today's exercise logs"""
+    user_id = await get_current_user(authorization, request)
+    
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    
+    logs = await db.exercises.find(
+        {"user_id": user_id, "date": today},
+        {"_id": 0}
+    ).sort("timestamp", -1).to_list(1000)
+    
+    total_minutes = sum(log["duration_minutes"] for log in logs)
+    total_calories = sum(log.get("calories", 0) for log in logs if log.get("calories"))
+    
+    return {
+        "total_minutes": total_minutes,
+        "total_calories": total_calories,
+        "session_count": len(logs),
+        "logs": [Exercise(**log) for log in logs]
+    }
+
+@api_router.get("/exercise/stats")
+async def get_exercise_stats(authorization: Optional[str] = Header(None), request: Request = None):
+    """Get exercise statistics"""
+    user_id = await get_current_user(authorization, request)
+    
+    # Get last 7 days
+    today = datetime.now(timezone.utc)
+    seven_days_ago = today - timedelta(days=7)
+    
+    logs = await db.exercises.find(
+        {
+            "user_id": user_id,
+            "timestamp": {"$gte": seven_days_ago}
+        },
+        {"_id": 0}
+    ).to_list(1000)
+    
+    # Calculate daily totals
+    daily_minutes = {}
+    for log in logs:
+        date = log["date"]
+        daily_minutes[date] = daily_minutes.get(date, 0) + log["duration_minutes"]
+    
+    # Get average
+    avg_minutes = int(sum(daily_minutes.values()) / 7) if daily_minutes else 0
+    total_minutes = sum(log["duration_minutes"] for log in logs)
+    total_sessions = len(logs)
+    
+    # Count by type
+    type_counts = {}
+    for log in logs:
+        exercise_type = log["type"]
+        type_counts[exercise_type] = type_counts.get(exercise_type, 0) + 1
+    
+    return {
+        "last_7_days": daily_minutes,
+        "average_minutes_per_day": avg_minutes,
+        "total_minutes": total_minutes,
+        "total_sessions": total_sessions,
+        "exercise_types": type_counts
+    }
+
+@api_router.delete("/exercise/{exercise_id}")
+async def delete_exercise_log(exercise_id: str, authorization: Optional[str] = Header(None), request: Request = None):
+    """Delete an exercise log"""
+    user_id = await get_current_user(authorization, request)
+    
+    result = await db.exercises.delete_one({"exercise_id": exercise_id, "user_id": user_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Exercise log not found")
+    
+    return {"message": "Exercise log deleted"}
 
 # ============= AI ENDPOINTS =============
 
