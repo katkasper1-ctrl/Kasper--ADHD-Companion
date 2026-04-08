@@ -1882,6 +1882,143 @@ async def delete_sleep_log(sleep_id: str, authorization: Optional[str] = Header(
     
     return {"message": "Sleep log deleted"}
 
+# ============= GROCERY ENDPOINTS =============
+
+class GroceryItemCreate(BaseModel):
+    name: str
+    quantity: Optional[str] = "1"
+    category: Optional[str] = "Other"
+    notes: Optional[str] = ""
+
+class GroceryReceiptCreate(BaseModel):
+    total_amount: float
+    store_name: Optional[str] = ""
+    receipt_image: Optional[str] = None  # base64 image
+    notes: Optional[str] = ""
+
+@api_router.get("/groceries")
+async def get_grocery_items(authorization: Optional[str] = Header(None), request: Request = None):
+    """Get all grocery items for the current user"""
+    user_id = await get_current_user(authorization, request)
+    items = await db.grocery_items.find(
+        {"user_id": user_id},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(500)
+    return items
+
+@api_router.post("/groceries")
+async def create_grocery_item(item: GroceryItemCreate, authorization: Optional[str] = Header(None), request: Request = None):
+    """Create a new grocery item"""
+    user_id = await get_current_user(authorization, request)
+    grocery_item = {
+        "item_id": str(uuid.uuid4()),
+        "user_id": user_id,
+        "name": item.name,
+        "quantity": item.quantity,
+        "category": item.category,
+        "notes": item.notes,
+        "checked": False,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.grocery_items.insert_one(grocery_item)
+    grocery_item.pop("_id", None)
+    return grocery_item
+
+@api_router.put("/groceries/{item_id}")
+async def update_grocery_item(item_id: str, updates: Dict[str, Any], authorization: Optional[str] = Header(None), request: Request = None):
+    """Update a grocery item (toggle checked, edit name, etc.)"""
+    user_id = await get_current_user(authorization, request)
+    allowed_fields = {"name", "quantity", "category", "notes", "checked"}
+    update_data = {k: v for k, v in updates.items() if k in allowed_fields}
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No valid fields to update")
+    result = await db.grocery_items.update_one(
+        {"item_id": item_id, "user_id": user_id},
+        {"$set": update_data}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Grocery item not found")
+    updated = await db.grocery_items.find_one({"item_id": item_id}, {"_id": 0})
+    return updated
+
+@api_router.delete("/groceries/{item_id}")
+async def delete_grocery_item(item_id: str, authorization: Optional[str] = Header(None), request: Request = None):
+    """Delete a grocery item"""
+    user_id = await get_current_user(authorization, request)
+    result = await db.grocery_items.delete_one({"item_id": item_id, "user_id": user_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Grocery item not found")
+    return {"message": "Grocery item deleted"}
+
+@api_router.delete("/groceries/clear/checked")
+async def clear_checked_items(authorization: Optional[str] = Header(None), request: Request = None):
+    """Clear all checked grocery items"""
+    user_id = await get_current_user(authorization, request)
+    result = await db.grocery_items.delete_many({"user_id": user_id, "checked": True})
+    return {"message": f"Cleared {result.deleted_count} items"}
+
+@api_router.post("/groceries/receipts")
+async def upload_receipt(receipt: GroceryReceiptCreate, authorization: Optional[str] = Header(None), request: Request = None):
+    """Upload a grocery receipt with photo and total"""
+    user_id = await get_current_user(authorization, request)
+    receipt_doc = {
+        "receipt_id": str(uuid.uuid4()),
+        "user_id": user_id,
+        "total_amount": receipt.total_amount,
+        "store_name": receipt.store_name,
+        "receipt_image": receipt.receipt_image,
+        "notes": receipt.notes,
+        "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.grocery_receipts.insert_one(receipt_doc)
+    receipt_doc.pop("_id", None)
+    return receipt_doc
+
+@api_router.get("/groceries/receipts")
+async def get_receipts(authorization: Optional[str] = Header(None), request: Request = None):
+    """Get all receipts for the current user"""
+    user_id = await get_current_user(authorization, request)
+    receipts = await db.grocery_receipts.find(
+        {"user_id": user_id},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(200)
+    return receipts
+
+@api_router.delete("/groceries/receipts/{receipt_id}")
+async def delete_receipt(receipt_id: str, authorization: Optional[str] = Header(None), request: Request = None):
+    """Delete a receipt"""
+    user_id = await get_current_user(authorization, request)
+    result = await db.grocery_receipts.delete_one({"receipt_id": receipt_id, "user_id": user_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Receipt not found")
+    return {"message": "Receipt deleted"}
+
+@api_router.get("/groceries/spending")
+async def get_grocery_spending(authorization: Optional[str] = Header(None), request: Request = None):
+    """Get spending summary for groceries"""
+    user_id = await get_current_user(authorization, request)
+    receipts = await db.grocery_receipts.find(
+        {"user_id": user_id},
+        {"_id": 0}
+    ).to_list(1000)
+
+    now = datetime.now(timezone.utc)
+    week_ago = (now - timedelta(days=7)).strftime("%Y-%m-%d")
+    month_start = now.strftime("%Y-%m-01")
+
+    total_all_time = sum(r.get("total_amount", 0) for r in receipts)
+    total_this_week = sum(r.get("total_amount", 0) for r in receipts if r.get("date", "") >= week_ago)
+    total_this_month = sum(r.get("total_amount", 0) for r in receipts if r.get("date", "") >= month_start)
+    receipt_count = len(receipts)
+
+    return {
+        "total_all_time": round(total_all_time, 2),
+        "total_this_week": round(total_this_week, 2),
+        "total_this_month": round(total_this_month, 2),
+        "receipt_count": receipt_count
+    }
+
 # ============= AI ENDPOINTS =============
 
 @api_router.post("/ai/focus-tip")

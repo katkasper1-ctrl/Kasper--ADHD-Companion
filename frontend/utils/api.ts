@@ -144,4 +144,15 @@ export const api = {
   getSleepGoal: () => apiRequest('/sleep/goal'),
   setSleepGoal: (data: any) => apiRequest('/sleep/goal', { method: 'POST', body: JSON.stringify(data) }),
   deleteSleepLog: (id: string) => apiRequest(`/sleep/${id}`, { method: 'DELETE' }),
+
+  // Groceries
+  getGroceryItems: () => apiRequest('/groceries'),
+  createGroceryItem: (data: any) => apiRequest('/groceries', { method: 'POST', body: JSON.stringify(data) }),
+  updateGroceryItem: (id: string, data: any) => apiRequest(`/groceries/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteGroceryItem: (id: string) => apiRequest(`/groceries/${id}`, { method: 'DELETE' }),
+  clearCheckedGroceries: () => apiRequest('/groceries/clear/checked', { method: 'DELETE' }),
+  getGroceryReceipts: () => apiRequest('/groceries/receipts'),
+  uploadGroceryReceipt: (data: any) => apiRequest('/groceries/receipts', { method: 'POST', body: JSON.stringify(data) }),
+  deleteGroceryReceipt: (id: string) => apiRequest(`/groceries/receipts/${id}`, { method: 'DELETE' }),
+  getGrocerySpending: () => apiRequest('/groceries/spending'),
 };
