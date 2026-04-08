@@ -96,6 +96,7 @@ export default function HomeScreen() {
     { title: 'Exercise', icon: 'fitness', route: '/exercise', color: '#1ABC9C', count: null },
     { title: 'Yoga', icon: 'leaf', route: '/yoga', color: '#7B68EE', count: null },
     { title: 'AI Buddy', icon: 'heart', route: '/therapy', color: '#FF6B9D', count: null },
+    { title: 'Diet', icon: 'nutrition', route: '/diet', color: '#2ECC71', count: null },
     { title: 'Hydration', icon: 'water', route: '/hydration', color: '#87CEEB', count: null },
     { title: 'Medications', icon: 'medical', route: '/medications', color: '#FF6B6B', count: null },
     { title: 'Money', icon: 'cash', route: '/expenses', color: '#FFB84D', count: null },

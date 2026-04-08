@@ -2152,6 +2152,205 @@ async def get_grocery_spending(authorization: Optional[str] = Header(None), requ
         "receipt_count": receipt_count
     }
 
+# ============= DIET TRACKER ENDPOINTS =============
+
+class DietLogCreate(BaseModel):
+    food_name: str
+    meal_type: str = "snack"  # breakfast, lunch, dinner, snack
+    food_category: str = "balanced"  # nutritious, comfort, balanced
+    calories: Optional[int] = None
+    protein_g: Optional[float] = None
+    carbs_g: Optional[float] = None
+    fat_g: Optional[float] = None
+    fiber_g: Optional[float] = None
+    sugar_g: Optional[float] = None
+    portion_size: Optional[str] = ""
+    mood_before: Optional[str] = ""
+    mood_after: Optional[str] = ""
+    notes: Optional[str] = ""
+
+class FoodAnalyzeRequest(BaseModel):
+    food_description: str
+
+@api_router.post("/diet/log")
+async def log_diet_entry(data: DietLogCreate, authorization: Optional[str] = Header(None), request: Request = None):
+    """Log a food/meal entry"""
+    user_id = await get_current_user(authorization, request)
+    entry = {
+        "entry_id": str(uuid.uuid4()),
+        "user_id": user_id,
+        "food_name": data.food_name,
+        "meal_type": data.meal_type,
+        "food_category": data.food_category,
+        "calories": data.calories,
+        "protein_g": data.protein_g,
+        "carbs_g": data.carbs_g,
+        "fat_g": data.fat_g,
+        "fiber_g": data.fiber_g,
+        "sugar_g": data.sugar_g,
+        "portion_size": data.portion_size or "",
+        "mood_before": data.mood_before or "",
+        "mood_after": data.mood_after or "",
+        "notes": data.notes or "",
+        "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.diet_logs.insert_one(entry)
+    entry.pop("_id", None)
+    return entry
+
+@api_router.get("/diet/today")
+async def get_today_diet(authorization: Optional[str] = Header(None), request: Request = None):
+    """Get today's diet log with nutritional summary"""
+    user_id = await get_current_user(authorization, request)
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    logs = await db.diet_logs.find(
+        {"user_id": user_id, "date": today}, {"_id": 0}
+    ).sort("created_at", 1).to_list(100)
+
+    total_cal = sum(l.get("calories") or 0 for l in logs)
+    total_protein = sum(l.get("protein_g") or 0 for l in logs)
+    total_carbs = sum(l.get("carbs_g") or 0 for l in logs)
+    total_fat = sum(l.get("fat_g") or 0 for l in logs)
+    total_fiber = sum(l.get("fiber_g") or 0 for l in logs)
+    total_sugar = sum(l.get("sugar_g") or 0 for l in logs)
+    nutritious_count = sum(1 for l in logs if l.get("food_category") == "nutritious")
+    comfort_count = sum(1 for l in logs if l.get("food_category") == "comfort")
+
+    return {
+        "date": today,
+        "logs": logs,
+        "summary": {
+            "total_calories": total_cal,
+            "total_protein_g": round(total_protein, 1),
+            "total_carbs_g": round(total_carbs, 1),
+            "total_fat_g": round(total_fat, 1),
+            "total_fiber_g": round(total_fiber, 1),
+            "total_sugar_g": round(total_sugar, 1),
+            "meal_count": len(logs),
+            "nutritious_count": nutritious_count,
+            "comfort_count": comfort_count,
+        }
+    }
+
+@api_router.get("/diet/logs")
+async def get_diet_logs(authorization: Optional[str] = Header(None), request: Request = None):
+    """Get all diet logs"""
+    user_id = await get_current_user(authorization, request)
+    logs = await db.diet_logs.find(
+        {"user_id": user_id}, {"_id": 0}
+    ).sort("created_at", -1).to_list(500)
+    return logs
+
+@api_router.delete("/diet/logs/{entry_id}")
+async def delete_diet_entry(entry_id: str, authorization: Optional[str] = Header(None), request: Request = None):
+    """Delete a diet entry"""
+    user_id = await get_current_user(authorization, request)
+    result = await db.diet_logs.delete_one({"entry_id": entry_id, "user_id": user_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Diet entry not found")
+    return {"message": "Diet entry deleted"}
+
+@api_router.get("/diet/insights")
+async def get_diet_insights(authorization: Optional[str] = Header(None), request: Request = None):
+    """Get diet insights and mood-food correlations"""
+    user_id = await get_current_user(authorization, request)
+    logs = await db.diet_logs.find(
+        {"user_id": user_id}, {"_id": 0}
+    ).sort("created_at", -1).to_list(200)
+
+    if len(logs) == 0:
+        return {"insights": [], "total_entries": 0, "comfort_ratio": 0, "avg_daily_calories": 0}
+
+    total = len(logs)
+    comfort = sum(1 for l in logs if l.get("food_category") == "comfort")
+    nutritious = sum(1 for l in logs if l.get("food_category") == "nutritious")
+
+    # Calculate average daily calories
+    dates = set(l.get("date", "") for l in logs)
+    total_cals = sum(l.get("calories") or 0 for l in logs)
+    avg_daily = round(total_cals / max(len(dates), 1))
+
+    # Mood patterns
+    mood_after_comfort = [l.get("mood_after", "") for l in logs if l.get("food_category") == "comfort" and l.get("mood_after")]
+    mood_after_nutritious = [l.get("mood_after", "") for l in logs if l.get("food_category") == "nutritious" and l.get("mood_after")]
+
+    insights = []
+    if comfort / max(total, 1) > 0.5:
+        insights.append({"type": "warning", "title": "High Comfort Food Intake", "text": "Over half your meals are comfort foods. Try adding one nutritious meal per day for better energy and focus."})
+    if nutritious / max(total, 1) > 0.6:
+        insights.append({"type": "positive", "title": "Great Nutritious Eating!", "text": "You're eating mostly nutritious foods. This is great for your ADHD focus and energy levels!"})
+    if avg_daily > 2500:
+        insights.append({"type": "info", "title": "High Calorie Intake", "text": f"Your average daily intake is {avg_daily} cal. Consider speaking to a nutritionist about your ideal daily target."})
+    if avg_daily > 0 and avg_daily < 1200:
+        insights.append({"type": "warning", "title": "Low Calorie Intake", "text": "You might not be eating enough. Your brain needs fuel to focus — make sure you're nourishing yourself."})
+
+    return {
+        "total_entries": total,
+        "comfort_ratio": round(comfort / max(total, 1) * 100),
+        "nutritious_ratio": round(nutritious / max(total, 1) * 100),
+        "avg_daily_calories": avg_daily,
+        "days_tracked": len(dates),
+        "insights": insights,
+    }
+
+@api_router.post("/diet/analyze")
+async def analyze_food(data: FoodAnalyzeRequest, authorization: Optional[str] = Header(None), request: Request = None):
+    """Use AI to analyze a food item and estimate nutritional value"""
+    user_id = await get_current_user(authorization, request)
+
+    prompt = f"""Analyze this food item and provide nutritional estimates. Return ONLY valid JSON with no additional text:
+{{
+  "food_name": "cleaned name of the food",
+  "calories": estimated calories (integer),
+  "protein_g": grams of protein (number),
+  "carbs_g": grams of carbs (number),
+  "fat_g": grams of fat (number),
+  "fiber_g": grams of fiber (number),
+  "sugar_g": grams of sugar (number),
+  "food_category": "nutritious" or "comfort" or "balanced",
+  "impact_mind": "brief description of how this food affects mental clarity and focus for someone with ADHD",
+  "impact_body": "brief description of how this food affects energy and body",
+  "impact_mood": "brief description of how this food affects mood",
+  "healthier_alternative": "if comfort food, suggest a healthier alternative, otherwise null"
+}}
+
+Food: {data.food_description}"""
+
+    try:
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=f"diet_{user_id}_{uuid.uuid4().hex[:6]}",
+            system_message="You are a nutritional analyst. Always respond with only valid JSON, no markdown formatting."
+        ).with_model("openai", "gpt-5.2")
+
+        response = await chat.send_message(UserMessage(text=prompt))
+        import json as json_lib
+        # Try to parse the AI response as JSON
+        clean = response.strip()
+        if clean.startswith("```"):
+            clean = clean.split("\n", 1)[1] if "\n" in clean else clean
+            clean = clean.rsplit("```", 1)[0] if "```" in clean else clean
+        result = json_lib.loads(clean)
+        return result
+    except Exception as e:
+        logger.error(f"Food analysis error: {e}")
+        return {
+            "food_name": data.food_description,
+            "calories": None,
+            "protein_g": None,
+            "carbs_g": None,
+            "fat_g": None,
+            "fiber_g": None,
+            "sugar_g": None,
+            "food_category": "balanced",
+            "impact_mind": "Unable to analyze at this time",
+            "impact_body": "Unable to analyze at this time",
+            "impact_mood": "Unable to analyze at this time",
+            "healthier_alternative": None,
+            "error": "Analysis temporarily unavailable"
+        }
+
 # ============= YOGA SESSION ENDPOINTS =============
 
 class YogaSessionCreate(BaseModel):

@@ -176,4 +176,12 @@ export const api = {
   clearTherapyHistory: () => apiRequest('/therapy/history', { method: 'DELETE' }),
   logMoodCheckin: (data: any) => apiRequest('/therapy/mood', { method: 'POST', body: JSON.stringify(data) }),
   getTherapyProgress: () => apiRequest('/therapy/progress'),
+
+  // Diet Tracker
+  logDietEntry: (data: any) => apiRequest('/diet/log', { method: 'POST', body: JSON.stringify(data) }),
+  getTodayDiet: () => apiRequest('/diet/today'),
+  getDietLogs: () => apiRequest('/diet/logs'),
+  deleteDietEntry: (id: string) => apiRequest(`/diet/logs/${id}`, { method: 'DELETE' }),
+  getDietInsights: () => apiRequest('/diet/insights'),
+  analyzeFood: (food: string) => apiRequest('/diet/analyze', { method: 'POST', body: JSON.stringify({ food_description: food }) }),
 };
