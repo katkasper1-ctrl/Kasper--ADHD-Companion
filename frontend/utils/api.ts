@@ -93,4 +93,11 @@ export const api = {
 
   // AI
   getFocusTip: () => apiRequest('/ai/focus-tip', { method: 'POST' }),
+
+  // Hydration
+  logHydration: (amount_ml: number) => apiRequest('/hydration/log', { method: 'POST', body: JSON.stringify({ amount_ml }) }),
+  getTodayHydration: () => apiRequest('/hydration/today'),
+  getHydrationStats: () => apiRequest('/hydration/stats'),
+  setHydrationGoal: (daily_goal_ml: number) => apiRequest('/hydration/goal', { method: 'POST', body: JSON.stringify({ daily_goal_ml }) }),
+  deleteHydrationLog: (id: string) => apiRequest(`/hydration/${id}`, { method: 'DELETE' }),
 };

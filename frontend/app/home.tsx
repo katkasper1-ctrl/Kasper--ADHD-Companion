@@ -88,6 +88,7 @@ export default function HomeScreen() {
     { title: 'Tasks', icon: 'checkbox', route: '/tasks', color: '#4A90E2', count: stats.tasks },
     { title: 'Focus', icon: 'timer', route: '/focus', color: '#7B68EE', count: `${Math.floor(stats.focusMinutes / 60)}h` },
     { title: 'Habits', icon: 'flame', route: '/habits', color: '#50C878', count: stats.habits },
+    { title: 'Hydration', icon: 'water', route: '/hydration', color: '#87CEEB', count: null },
     { title: 'Medications', icon: 'medical', route: '/medications', color: '#FF6B6B', count: null },
     { title: 'Money', icon: 'cash', route: '/expenses', color: '#FFB84D', count: null },
     { title: 'Events', icon: 'calendar', route: '/events', color: '#9B59B6', count: null },

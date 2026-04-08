@@ -183,6 +183,25 @@ class RoutineCreate(BaseModel):
     days: List[str]
     active: Optional[bool] = True
 
+class HydrationLog(BaseModel):
+    hydration_id: str
+    user_id: str
+    amount_ml: int
+    timestamp: datetime
+    date: str  # YYYY-MM-DD for daily aggregation
+
+class HydrationLogCreate(BaseModel):
+    amount_ml: int
+
+class HydrationGoal(BaseModel):
+    goal_id: str
+    user_id: str
+    daily_goal_ml: int
+    created_at: datetime
+
+class HydrationGoalCreate(BaseModel):
+    daily_goal_ml: int
+
 # ============= HELPERS =============
 
 def hash_password(password: str) -> str:
@@ -861,6 +880,122 @@ async def delete_routine(routine_id: str, authorization: Optional[str] = Header(
         raise HTTPException(status_code=404, detail="Routine not found")
     
     return {"message": "Routine deleted"}
+
+# ============= HYDRATION ENDPOINTS =============
+
+@api_router.post("/hydration/log", response_model=HydrationLog)
+async def log_hydration(log_data: HydrationLogCreate, authorization: Optional[str] = Header(None), request: Request = None):
+    """Log water intake"""
+    user_id = await get_current_user(authorization, request)
+    
+    now = datetime.now(timezone.utc)
+    hydration_id = f"hydrate_{uuid.uuid4().hex[:12]}"
+    log = {
+        "hydration_id": hydration_id,
+        "user_id": user_id,
+        "amount_ml": log_data.amount_ml,
+        "timestamp": now,
+        "date": now.strftime("%Y-%m-%d")
+    }
+    
+    await db.hydration_logs.insert_one(log)
+    return HydrationLog(**log)
+
+@api_router.get("/hydration/today")
+async def get_today_hydration(authorization: Optional[str] = Header(None), request: Request = None):
+    """Get today's hydration total and logs"""
+    user_id = await get_current_user(authorization, request)
+    
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    
+    logs = await db.hydration_logs.find(
+        {"user_id": user_id, "date": today},
+        {"_id": 0}
+    ).sort("timestamp", -1).to_list(1000)
+    
+    total_ml = sum(log["amount_ml"] for log in logs)
+    
+    # Get user's goal
+    goal_doc = await db.hydration_goals.find_one({"user_id": user_id}, {"_id": 0})
+    daily_goal_ml = goal_doc["daily_goal_ml"] if goal_doc else 2000  # Default 2L
+    
+    return {
+        "total_ml": total_ml,
+        "daily_goal_ml": daily_goal_ml,
+        "percentage": min(100, int((total_ml / daily_goal_ml) * 100)),
+        "logs": [HydrationLog(**log) for log in logs]
+    }
+
+@api_router.get("/hydration/stats")
+async def get_hydration_stats(authorization: Optional[str] = Header(None), request: Request = None):
+    """Get hydration statistics"""
+    user_id = await get_current_user(authorization, request)
+    
+    # Get last 7 days
+    today = datetime.now(timezone.utc)
+    seven_days_ago = today - timedelta(days=7)
+    
+    logs = await db.hydration_logs.find(
+        {
+            "user_id": user_id,
+            "timestamp": {"$gte": seven_days_ago}
+        },
+        {"_id": 0}
+    ).to_list(1000)
+    
+    # Calculate daily totals
+    daily_totals = {}
+    for log in logs:
+        date = log["date"]
+        daily_totals[date] = daily_totals.get(date, 0) + log["amount_ml"]
+    
+    # Get average
+    avg_ml = int(sum(daily_totals.values()) / 7) if daily_totals else 0
+    
+    return {
+        "last_7_days": daily_totals,
+        "average_ml": avg_ml,
+        "total_logs": len(logs)
+    }
+
+@api_router.post("/hydration/goal", response_model=HydrationGoal)
+async def set_hydration_goal(goal_data: HydrationGoalCreate, authorization: Optional[str] = Header(None), request: Request = None):
+    """Set daily hydration goal"""
+    user_id = await get_current_user(authorization, request)
+    
+    # Check if goal exists
+    existing_goal = await db.hydration_goals.find_one({"user_id": user_id}, {"_id": 0})
+    
+    if existing_goal:
+        # Update existing goal
+        await db.hydration_goals.update_one(
+            {"user_id": user_id},
+            {"$set": {"daily_goal_ml": goal_data.daily_goal_ml}}
+        )
+        existing_goal["daily_goal_ml"] = goal_data.daily_goal_ml
+        return HydrationGoal(**existing_goal)
+    else:
+        # Create new goal
+        goal_id = f"goal_{uuid.uuid4().hex[:12]}"
+        goal = {
+            "goal_id": goal_id,
+            "user_id": user_id,
+            "daily_goal_ml": goal_data.daily_goal_ml,
+            "created_at": datetime.now(timezone.utc)
+        }
+        await db.hydration_goals.insert_one(goal)
+        return HydrationGoal(**goal)
+
+@api_router.delete("/hydration/{hydration_id}")
+async def delete_hydration_log(hydration_id: str, authorization: Optional[str] = Header(None), request: Request = None):
+    """Delete a hydration log"""
+    user_id = await get_current_user(authorization, request)
+    
+    result = await db.hydration_logs.delete_one({"hydration_id": hydration_id, "user_id": user_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Hydration log not found")
+    
+    return {"message": "Log deleted"}
 
 # ============= AI ENDPOINTS =============
 
