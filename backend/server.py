@@ -220,6 +220,22 @@ class ExerciseCreate(BaseModel):
     calories: Optional[int] = None
     notes: Optional[str] = ""
 
+class Mood(BaseModel):
+    mood_id: str
+    user_id: str
+    mood: str  # Happy, Sad, Anxious, Calm, etc.
+    emoji: str  # 😊, 😢, 😰, 😌, etc.
+    intensity: int  # 1-5 scale
+    notes: Optional[str] = ""
+    timestamp: datetime
+    date: str  # YYYY-MM-DD
+
+class MoodCreate(BaseModel):
+    mood: str
+    emoji: str
+    intensity: int = 3
+    notes: Optional[str] = ""
+
 # ============= HELPERS =============
 
 def hash_password(password: str) -> str:
@@ -1113,6 +1129,105 @@ async def delete_exercise_log(exercise_id: str, authorization: Optional[str] = H
         raise HTTPException(status_code=404, detail="Exercise log not found")
     
     return {"message": "Exercise log deleted"}
+
+# ============= MOOD TRACKER ENDPOINTS =============
+
+@api_router.post("/mood/log", response_model=Mood)
+async def log_mood(mood_data: MoodCreate, authorization: Optional[str] = Header(None), request: Request = None):
+    """Log current mood/feeling"""
+    user_id = await get_current_user(authorization, request)
+    
+    now = datetime.now(timezone.utc)
+    mood_id = f"mood_{uuid.uuid4().hex[:12]}"
+    mood = {
+        "mood_id": mood_id,
+        "user_id": user_id,
+        "mood": mood_data.mood,
+        "emoji": mood_data.emoji,
+        "intensity": mood_data.intensity,
+        "notes": mood_data.notes or "",
+        "timestamp": now,
+        "date": now.strftime("%Y-%m-%d")
+    }
+    
+    await db.moods.insert_one(mood)
+    return Mood(**mood)
+
+@api_router.get("/mood/today")
+async def get_today_mood(authorization: Optional[str] = Header(None), request: Request = None):
+    """Get today's mood logs"""
+    user_id = await get_current_user(authorization, request)
+    
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    
+    logs = await db.moods.find(
+        {"user_id": user_id, "date": today},
+        {"_id": 0}
+    ).sort("timestamp", -1).to_list(1000)
+    
+    return {
+        "check_in_count": len(logs),
+        "logs": [Mood(**log) for log in logs],
+        "latest_mood": logs[0]["mood"] if logs else None,
+        "latest_emoji": logs[0]["emoji"] if logs else None
+    }
+
+@api_router.get("/mood/stats")
+async def get_mood_stats(authorization: Optional[str] = Header(None), request: Request = None):
+    """Get mood statistics"""
+    user_id = await get_current_user(authorization, request)
+    
+    # Get last 7 days
+    today = datetime.now(timezone.utc)
+    seven_days_ago = today - timedelta(days=7)
+    
+    logs = await db.moods.find(
+        {
+            "user_id": user_id,
+            "timestamp": {"$gte": seven_days_ago}
+        },
+        {"_id": 0}
+    ).to_list(1000)
+    
+    # Count moods
+    mood_counts = {}
+    for log in logs:
+        mood = log["mood"]
+        mood_counts[mood] = mood_counts.get(mood, 0) + 1
+    
+    # Get daily check-ins
+    daily_checkins = {}
+    for log in logs:
+        date = log["date"]
+        daily_checkins[date] = daily_checkins.get(date, 0) + 1
+    
+    # Get most common mood
+    most_common_mood = max(mood_counts.items(), key=lambda x: x[1])[0] if mood_counts else None
+    most_common_emoji = None
+    if most_common_mood:
+        for log in logs:
+            if log["mood"] == most_common_mood:
+                most_common_emoji = log["emoji"]
+                break
+    
+    return {
+        "total_check_ins": len(logs),
+        "mood_distribution": mood_counts,
+        "daily_check_ins": daily_checkins,
+        "most_common_mood": most_common_mood,
+        "most_common_emoji": most_common_emoji
+    }
+
+@api_router.delete("/mood/{mood_id}")
+async def delete_mood_log(mood_id: str, authorization: Optional[str] = Header(None), request: Request = None):
+    """Delete a mood log"""
+    user_id = await get_current_user(authorization, request)
+    
+    result = await db.moods.delete_one({"mood_id": mood_id, "user_id": user_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Mood log not found")
+    
+    return {"message": "Mood log deleted"}
 
 # ============= AI ENDPOINTS =============
 

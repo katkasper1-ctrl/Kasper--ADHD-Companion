@@ -40,6 +40,7 @@ export default function RootLayout() {
       <Stack.Screen name="routines" />
       <Stack.Screen name="hydration" />
       <Stack.Screen name="exercise" />
+      <Stack.Screen name="mood" />
     </Stack>
   );
 }

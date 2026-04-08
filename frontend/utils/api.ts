@@ -106,4 +106,10 @@ export const api = {
   getTodayExercise: () => apiRequest('/exercise/today'),
   getExerciseStats: () => apiRequest('/exercise/stats'),
   deleteExerciseLog: (id: string) => apiRequest(`/exercise/${id}`, { method: 'DELETE' }),
+
+  // Mood
+  logMood: (data: any) => apiRequest('/mood/log', { method: 'POST', body: JSON.stringify(data) }),
+  getTodayMood: () => apiRequest('/mood/today'),
+  getMoodStats: () => apiRequest('/mood/stats'),
+  deleteMoodLog: (id: string) => apiRequest(`/mood/${id}`, { method: 'DELETE' }),
 };
