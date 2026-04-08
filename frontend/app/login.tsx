@@ -44,8 +44,9 @@ export default function LoginScreen() {
   }
 
   function handleGoogleLogin() {
-    // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
-    const redirectUrl = process.env.EXPO_PUBLIC_BACKEND_URL + '/home';
+    const redirectUrl = (Platform.OS === 'web' && typeof window !== 'undefined')
+      ? window.location.origin + '/home'
+      : '';
     const authUrl = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
     // In a real app, open this in a browser or WebView
     Alert.alert('Google Login', `Open: ${authUrl}`);
