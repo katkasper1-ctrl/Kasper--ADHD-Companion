@@ -236,6 +236,58 @@ class MoodCreate(BaseModel):
     intensity: int = 3
     notes: Optional[str] = ""
 
+class Course(BaseModel):
+    course_id: str
+    user_id: str
+    name: str
+    color: str = "#4A90E2"
+    instructor: Optional[str] = ""
+    schedule: Optional[str] = ""
+    created_at: datetime
+
+class CourseCreate(BaseModel):
+    name: str
+    color: Optional[str] = "#4A90E2"
+    instructor: Optional[str] = ""
+    schedule: Optional[str] = ""
+
+class Assignment(BaseModel):
+    assignment_id: str
+    user_id: str
+    course_id: Optional[str] = None
+    course_name: Optional[str] = None
+    title: str
+    description: Optional[str] = ""
+    due_date: datetime
+    priority: str = "medium"
+    completed: bool = False
+    grade: Optional[str] = None
+    created_at: datetime
+
+class AssignmentCreate(BaseModel):
+    course_id: Optional[str] = None
+    title: str
+    description: Optional[str] = ""
+    due_date: datetime
+    priority: Optional[str] = "medium"
+
+class StudySession(BaseModel):
+    study_session_id: str
+    user_id: str
+    course_id: Optional[str] = None
+    course_name: Optional[str] = None
+    duration_minutes: int
+    topic: str
+    notes: Optional[str] = ""
+    timestamp: datetime
+    date: str
+
+class StudySessionCreate(BaseModel):
+    course_id: Optional[str] = None
+    duration_minutes: int
+    topic: str
+    notes: Optional[str] = ""
+
 # ============= HELPERS =============
 
 def hash_password(password: str) -> str:
@@ -1228,6 +1280,188 @@ async def delete_mood_log(mood_id: str, authorization: Optional[str] = Header(No
         raise HTTPException(status_code=404, detail="Mood log not found")
     
     return {"message": "Mood log deleted"}
+
+# ============= SCHOOL/STUDY ENDPOINTS =============
+
+@api_router.post("/courses", response_model=Course)
+async def create_course(course_data: CourseCreate, authorization: Optional[str] = Header(None), request: Request = None):
+    """Create a new course/subject"""
+    user_id = await get_current_user(authorization, request)
+    
+    course_id = f"course_{uuid.uuid4().hex[:12]}"
+    course = {
+        "course_id": course_id,
+        "user_id": user_id,
+        "name": course_data.name,
+        "color": course_data.color or "#4A90E2",
+        "instructor": course_data.instructor or "",
+        "schedule": course_data.schedule or "",
+        "created_at": datetime.now(timezone.utc)
+    }
+    
+    await db.courses.insert_one(course)
+    return Course(**course)
+
+@api_router.get("/courses", response_model=List[Course])
+async def get_courses(authorization: Optional[str] = Header(None), request: Request = None):
+    """Get all courses"""
+    user_id = await get_current_user(authorization, request)
+    
+    courses = await db.courses.find({"user_id": user_id}, {"_id": 0}).to_list(1000)
+    return [Course(**course) for course in courses]
+
+@api_router.delete("/courses/{course_id}")
+async def delete_course(course_id: str, authorization: Optional[str] = Header(None), request: Request = None):
+    """Delete a course"""
+    user_id = await get_current_user(authorization, request)
+    
+    result = await db.courses.delete_one({"course_id": course_id, "user_id": user_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Course not found")
+    
+    return {"message": "Course deleted"}
+
+@api_router.post("/assignments", response_model=Assignment)
+async def create_assignment(assignment_data: AssignmentCreate, authorization: Optional[str] = Header(None), request: Request = None):
+    """Create a new assignment"""
+    user_id = await get_current_user(authorization, request)
+    
+    assignment_id = f"assign_{uuid.uuid4().hex[:12]}"
+    
+    # Get course name if course_id provided
+    course_name = None
+    if assignment_data.course_id:
+        course = await db.courses.find_one({"course_id": assignment_data.course_id}, {"_id": 0})
+        if course:
+            course_name = course["name"]
+    
+    assignment = {
+        "assignment_id": assignment_id,
+        "user_id": user_id,
+        "course_id": assignment_data.course_id,
+        "course_name": course_name,
+        "title": assignment_data.title,
+        "description": assignment_data.description or "",
+        "due_date": assignment_data.due_date,
+        "priority": assignment_data.priority or "medium",
+        "completed": False,
+        "grade": None,
+        "created_at": datetime.now(timezone.utc)
+    }
+    
+    await db.assignments.insert_one(assignment)
+    return Assignment(**assignment)
+
+@api_router.get("/assignments", response_model=List[Assignment])
+async def get_assignments(authorization: Optional[str] = Header(None), request: Request = None):
+    """Get all assignments"""
+    user_id = await get_current_user(authorization, request)
+    
+    assignments = await db.assignments.find({"user_id": user_id}, {"_id": 0}).sort("due_date", 1).to_list(1000)
+    return [Assignment(**assignment) for assignment in assignments]
+
+@api_router.put("/assignments/{assignment_id}")
+async def update_assignment(assignment_id: str, assignment_data: Dict[str, Any], authorization: Optional[str] = Header(None), request: Request = None):
+    """Update an assignment"""
+    user_id = await get_current_user(authorization, request)
+    
+    assignment = await db.assignments.find_one({"assignment_id": assignment_id, "user_id": user_id}, {"_id": 0})
+    if not assignment:
+        raise HTTPException(status_code=404, detail="Assignment not found")
+    
+    await db.assignments.update_one(
+        {"assignment_id": assignment_id},
+        {"$set": assignment_data}
+    )
+    
+    updated = await db.assignments.find_one({"assignment_id": assignment_id}, {"_id": 0})
+    return Assignment(**updated)
+
+@api_router.delete("/assignments/{assignment_id}")
+async def delete_assignment(assignment_id: str, authorization: Optional[str] = Header(None), request: Request = None):
+    """Delete an assignment"""
+    user_id = await get_current_user(authorization, request)
+    
+    result = await db.assignments.delete_one({"assignment_id": assignment_id, "user_id": user_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Assignment not found")
+    
+    return {"message": "Assignment deleted"}
+
+@api_router.post("/study-sessions", response_model=StudySession)
+async def create_study_session(session_data: StudySessionCreate, authorization: Optional[str] = Header(None), request: Request = None):
+    """Log a study session"""
+    user_id = await get_current_user(authorization, request)
+    
+    now = datetime.now(timezone.utc)
+    session_id = f"study_{uuid.uuid4().hex[:12]}"
+    
+    # Get course name if course_id provided
+    course_name = None
+    if session_data.course_id:
+        course = await db.courses.find_one({"course_id": session_data.course_id}, {"_id": 0})
+        if course:
+            course_name = course["name"]
+    
+    session = {
+        "study_session_id": session_id,
+        "user_id": user_id,
+        "course_id": session_data.course_id,
+        "course_name": course_name,
+        "duration_minutes": session_data.duration_minutes,
+        "topic": session_data.topic,
+        "notes": session_data.notes or "",
+        "timestamp": now,
+        "date": now.strftime("%Y-%m-%d")
+    }
+    
+    await db.study_sessions.insert_one(session)
+    return StudySession(**session)
+
+@api_router.get("/study-sessions/stats")
+async def get_study_stats(authorization: Optional[str] = Header(None), request: Request = None):
+    """Get study session statistics"""
+    user_id = await get_current_user(authorization, request)
+    
+    # Get last 7 days
+    today = datetime.now(timezone.utc)
+    seven_days_ago = today - timedelta(days=7)
+    
+    sessions = await db.study_sessions.find(
+        {
+            "user_id": user_id,
+            "timestamp": {"$gte": seven_days_ago}
+        },
+        {"_id": 0}
+    ).to_list(1000)
+    
+    # Get today's sessions
+    today_str = today.strftime("%Y-%m-%d")
+    today_sessions = [s for s in sessions if s["date"] == today_str]
+    today_minutes = sum(s["duration_minutes"] for s in today_sessions)
+    
+    # Total stats
+    total_minutes = sum(s["duration_minutes"] for s in sessions)
+    total_sessions = len(sessions)
+    
+    return {
+        "today_minutes": today_minutes,
+        "today_sessions": len(today_sessions),
+        "week_total_minutes": total_minutes,
+        "week_total_sessions": total_sessions,
+        "recent_sessions": [StudySession(**s) for s in sorted(sessions, key=lambda x: x["timestamp"], reverse=True)[:5]]
+    }
+
+@api_router.delete("/study-sessions/{session_id}")
+async def delete_study_session(session_id: str, authorization: Optional[str] = Header(None), request: Request = None):
+    """Delete a study session"""
+    user_id = await get_current_user(authorization, request)
+    
+    result = await db.study_sessions.delete_one({"study_session_id": session_id, "user_id": user_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Study session not found")
+    
+    return {"message": "Study session deleted"}
 
 # ============= AI ENDPOINTS =============
 

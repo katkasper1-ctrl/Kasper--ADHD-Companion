@@ -112,4 +112,16 @@ export const api = {
   getTodayMood: () => apiRequest('/mood/today'),
   getMoodStats: () => apiRequest('/mood/stats'),
   deleteMoodLog: (id: string) => apiRequest(`/mood/${id}`, { method: 'DELETE' }),
+
+  // School/Study
+  getCourses: () => apiRequest('/courses'),
+  createCourse: (data: any) => apiRequest('/courses', { method: 'POST', body: JSON.stringify(data) }),
+  deleteCourse: (id: string) => apiRequest(`/courses/${id}`, { method: 'DELETE' }),
+  getAssignments: () => apiRequest('/assignments'),
+  createAssignment: (data: any) => apiRequest('/assignments', { method: 'POST', body: JSON.stringify(data) }),
+  updateAssignment: (id: string, data: any) => apiRequest(`/assignments/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteAssignment: (id: string) => apiRequest(`/assignments/${id}`, { method: 'DELETE' }),
+  createStudySession: (data: any) => apiRequest('/study-sessions', { method: 'POST', body: JSON.stringify(data) }),
+  getStudyStats: () => apiRequest('/study-sessions/stats'),
+  deleteStudySession: (id: string) => apiRequest(`/study-sessions/${id}`, { method: 'DELETE' }),
 };
