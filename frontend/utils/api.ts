@@ -166,4 +166,14 @@ export const api = {
   logYogaSession: (data: any) => apiRequest('/yoga/log', { method: 'POST', body: JSON.stringify(data) }),
   getYogaLogs: () => apiRequest('/yoga/logs'),
   deleteYogaLog: (id: string) => apiRequest(`/yoga/logs/${id}`, { method: 'DELETE' }),
+
+  // Therapy Buddy
+  getAvailableBuddies: () => apiRequest('/therapy/buddies'),
+  getSelectedBuddy: () => apiRequest('/therapy/buddy'),
+  selectBuddy: (buddyId: string) => apiRequest('/therapy/buddy', { method: 'PUT', body: JSON.stringify({ buddy_id: buddyId }) }),
+  sendTherapyMessage: (message: string) => apiRequest('/therapy/chat', { method: 'POST', body: JSON.stringify({ message }) }),
+  getTherapyHistory: () => apiRequest('/therapy/history'),
+  clearTherapyHistory: () => apiRequest('/therapy/history', { method: 'DELETE' }),
+  logMoodCheckin: (data: any) => apiRequest('/therapy/mood', { method: 'POST', body: JSON.stringify(data) }),
+  getTherapyProgress: () => apiRequest('/therapy/progress'),
 };

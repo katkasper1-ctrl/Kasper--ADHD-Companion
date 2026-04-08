@@ -2198,6 +2198,212 @@ async def delete_yoga_log(session_id: str, authorization: Optional[str] = Header
         raise HTTPException(status_code=404, detail="Yoga session not found")
     return {"message": "Yoga session deleted"}
 
+# ============= AI THERAPY BUDDY ENDPOINTS =============
+
+ANIMAL_BUDDIES = {
+    "luna_cat": {"name": "Luna", "animal": "Cat", "emoji": "🐱", "personality": "calm, gentle, and a great listener. You speak softly and reassuringly, often using purring metaphors."},
+    "bear_dog": {"name": "Bear", "animal": "Dog", "emoji": "🐶", "personality": "enthusiastic, loyal, and always excited to see the user. You are warm and supportive like a best friend."},
+    "ollie_owl": {"name": "Ollie", "animal": "Owl", "emoji": "🦉", "personality": "wise, thoughtful, and reflective. You ask deep questions and help the user see things from different perspectives."},
+    "penny_penguin": {"name": "Penny", "animal": "Penguin", "emoji": "🐧", "personality": "playful, encouraging, and optimistic. You use humor gently and always find the silver lining."},
+    "rosie_rabbit": {"name": "Rosie", "animal": "Rabbit", "emoji": "🐰", "personality": "soft, nurturing, and empathetic. You make the user feel safe and understood, speaking tenderly."},
+    "felix_fox": {"name": "Felix", "animal": "Fox", "emoji": "🦊", "personality": "smart, curious, and resourceful. You help the user problem-solve while being emotionally supportive."},
+    "ellie_elephant": {"name": "Ellie", "animal": "Elephant", "emoji": "🐘", "personality": "patient, remembers everything, and never judges. You have a calm, steady presence and great memory."},
+    "sunny_sloth": {"name": "Sunny", "animal": "Sloth", "emoji": "🦥", "personality": "relaxed, takes things slow, and reminds the user it is ok to rest. You encourage self-care and breathing exercises."},
+    "kai_koala": {"name": "Kai", "animal": "Koala", "emoji": "🐨", "personality": "cozy, comforting, and soothing. You specialize in calming anxiety and helping the user feel grounded."},
+    "dash_dolphin": {"name": "Dash", "animal": "Dolphin", "emoji": "🐬", "personality": "energetic, positive, and uplifting. You celebrate small wins and encourage the user with high energy."},
+}
+
+class BuddySelect(BaseModel):
+    buddy_id: str
+
+class TherapyMessage(BaseModel):
+    message: str
+
+class MoodCheckIn(BaseModel):
+    mood_score: int  # 1-5
+    mood_label: str  # sad, anxious, neutral, good, great
+    notes: Optional[str] = ""
+
+@api_router.get("/therapy/buddies")
+async def get_available_buddies():
+    """Get list of available animal buddies"""
+    buddies = []
+    for bid, info in ANIMAL_BUDDIES.items():
+        buddies.append({"buddy_id": bid, "name": info["name"], "animal": info["animal"], "emoji": info["emoji"]})
+    return buddies
+
+@api_router.get("/therapy/buddy")
+async def get_selected_buddy(authorization: Optional[str] = Header(None), request: Request = None):
+    """Get user's selected buddy"""
+    user_id = await get_current_user(authorization, request)
+    selection = await db.therapy_buddies.find_one({"user_id": user_id}, {"_id": 0})
+    if not selection:
+        return {"buddy_id": None}
+    return selection
+
+@api_router.put("/therapy/buddy")
+async def select_buddy(data: BuddySelect, authorization: Optional[str] = Header(None), request: Request = None):
+    """Select or change animal buddy"""
+    user_id = await get_current_user(authorization, request)
+    if data.buddy_id not in ANIMAL_BUDDIES:
+        raise HTTPException(status_code=400, detail="Invalid buddy ID")
+    buddy_info = ANIMAL_BUDDIES[data.buddy_id]
+    doc = {
+        "user_id": user_id,
+        "buddy_id": data.buddy_id,
+        "buddy_name": buddy_info["name"],
+        "buddy_animal": buddy_info["animal"],
+        "buddy_emoji": buddy_info["emoji"],
+        "selected_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.therapy_buddies.update_one({"user_id": user_id}, {"$set": doc}, upsert=True)
+    return doc
+
+@api_router.post("/therapy/chat")
+async def therapy_chat(data: TherapyMessage, authorization: Optional[str] = Header(None), request: Request = None):
+    """Send a message to your AI therapy buddy"""
+    user_id = await get_current_user(authorization, request)
+
+    # Get buddy selection
+    selection = await db.therapy_buddies.find_one({"user_id": user_id})
+    if not selection or not selection.get("buddy_id"):
+        raise HTTPException(status_code=400, detail="Please select a buddy first")
+
+    buddy_id = selection["buddy_id"]
+    buddy_info = ANIMAL_BUDDIES.get(buddy_id, ANIMAL_BUDDIES["luna_cat"])
+
+    # Get recent chat history for context
+    recent = await db.therapy_chats.find(
+        {"user_id": user_id}
+    ).sort("created_at", -1).limit(10).to_list(10)
+    recent.reverse()
+
+    context_messages = ""
+    for msg in recent:
+        role = "User" if msg.get("role") == "user" else buddy_info["name"]
+        context_messages += f"{role}: {msg.get('content', '')}\n"
+
+    system_prompt = f"""You are {buddy_info['name']} the {buddy_info['animal']} {buddy_info['emoji']}, an AI therapy buddy for someone with ADHD. Your personality is {buddy_info['personality']}
+
+IMPORTANT GUIDELINES:
+- Be warm, empathetic, and non-judgmental
+- Ask thoughtful follow-up questions like "How does that make you feel?" or "Tell me more about that"
+- Periodically suggest calming exercises like "Let's take a few nice calm breaths together. Breathe in... 1... 2... 3... 4... 5... and slowly breathe out"
+- If the user seems distressed, gently remind them that talking to a medical professional is always a good idea
+- Keep responses conversational and not too long (2-4 sentences usually)
+- Remember you are a supportive companion, NOT a replacement for professional therapy
+- Use your animal personality naturally in conversation
+- If the user seems to be in crisis, kindly suggest they reach out to a helpline or trusted person
+- Track emotional themes and gently reflect patterns you notice
+- Celebrate small victories and progress
+
+Recent conversation context:
+{context_messages}"""
+
+    try:
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=f"therapy_{user_id}_{uuid.uuid4().hex[:6]}",
+            system_message=system_prompt
+        ).with_model("openai", "gpt-5.2")
+
+        ai_response = await chat.send_message(UserMessage(text=data.message))
+    except Exception as e:
+        logger.error(f"Therapy chat error: {e}")
+        ai_response = f"I'm here for you! 💕 Sometimes my thoughts get a little fuzzy, but I'm always listening. Can you tell me more about how you're feeling?"
+
+    now = datetime.now(timezone.utc).isoformat()
+    # Store user message
+    await db.therapy_chats.insert_one({
+        "chat_id": str(uuid.uuid4()),
+        "user_id": user_id,
+        "role": "user",
+        "content": data.message,
+        "created_at": now
+    })
+    # Store AI response
+    ai_chat_id = str(uuid.uuid4())
+    await db.therapy_chats.insert_one({
+        "chat_id": ai_chat_id,
+        "user_id": user_id,
+        "role": "assistant",
+        "content": ai_response,
+        "buddy_id": buddy_id,
+        "created_at": now
+    })
+
+    return {"response": ai_response, "chat_id": ai_chat_id}
+
+@api_router.get("/therapy/history")
+async def get_therapy_history(authorization: Optional[str] = Header(None), request: Request = None):
+    """Get chat history"""
+    user_id = await get_current_user(authorization, request)
+    chats = await db.therapy_chats.find(
+        {"user_id": user_id}, {"_id": 0}
+    ).sort("created_at", 1).to_list(200)
+    return chats
+
+@api_router.delete("/therapy/history")
+async def clear_therapy_history(authorization: Optional[str] = Header(None), request: Request = None):
+    """Clear all chat history"""
+    user_id = await get_current_user(authorization, request)
+    result = await db.therapy_chats.delete_many({"user_id": user_id})
+    return {"message": f"Cleared {result.deleted_count} messages"}
+
+@api_router.post("/therapy/mood")
+async def log_mood_checkin(data: MoodCheckIn, authorization: Optional[str] = Header(None), request: Request = None):
+    """Log a mood check-in for progress tracking"""
+    user_id = await get_current_user(authorization, request)
+    checkin = {
+        "checkin_id": str(uuid.uuid4()),
+        "user_id": user_id,
+        "mood_score": data.mood_score,
+        "mood_label": data.mood_label,
+        "notes": data.notes or "",
+        "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.mood_checkins.insert_one(checkin)
+    checkin.pop("_id", None)
+    return checkin
+
+@api_router.get("/therapy/progress")
+async def get_therapy_progress(authorization: Optional[str] = Header(None), request: Request = None):
+    """Get mood progress over time"""
+    user_id = await get_current_user(authorization, request)
+    checkins = await db.mood_checkins.find(
+        {"user_id": user_id}, {"_id": 0}
+    ).sort("created_at", -1).to_list(100)
+
+    total = len(checkins)
+    if total == 0:
+        return {"checkins": [], "average_mood": 0, "total_sessions": 0, "trend": "neutral"}
+
+    avg = sum(c.get("mood_score", 3) for c in checkins) / total
+    # Check trend from last 5 vs previous 5
+    recent_5 = checkins[:5]
+    older_5 = checkins[5:10]
+    trend = "neutral"
+    if len(older_5) >= 3:
+        recent_avg = sum(c.get("mood_score", 3) for c in recent_5) / len(recent_5)
+        older_avg = sum(c.get("mood_score", 3) for c in older_5) / len(older_5)
+        if recent_avg > older_avg + 0.3:
+            trend = "improving"
+        elif recent_avg < older_avg - 0.3:
+            trend = "declining"
+
+    # Count chat sessions
+    chat_count = await db.therapy_chats.count_documents({"user_id": user_id, "role": "user"})
+
+    return {
+        "checkins": checkins[:30],
+        "average_mood": round(avg, 1),
+        "total_sessions": chat_count,
+        "total_checkins": total,
+        "trend": trend,
+        "needs_attention": avg < 2.5 and total >= 5
+    }
+
 # ============= AI ENDPOINTS =============
 
 @api_router.post("/ai/focus-tip")
