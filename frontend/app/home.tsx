@@ -94,6 +94,7 @@ export default function HomeScreen() {
     { title: 'School', icon: 'school', route: '/school', color: '#6A5ACD', count: null },
     { title: 'Mood', icon: 'happy', route: '/mood', color: '#FF69B4', count: null },
     { title: 'Exercise', icon: 'fitness', route: '/exercise', color: '#1ABC9C', count: null },
+    { title: 'Yoga', icon: 'leaf', route: '/yoga', color: '#7B68EE', count: null },
     { title: 'Hydration', icon: 'water', route: '/hydration', color: '#87CEEB', count: null },
     { title: 'Medications', icon: 'medical', route: '/medications', color: '#FF6B6B', count: null },
     { title: 'Money', icon: 'cash', route: '/expenses', color: '#FFB84D', count: null },
