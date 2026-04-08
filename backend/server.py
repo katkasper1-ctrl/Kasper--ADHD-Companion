@@ -128,6 +128,7 @@ class Expense(BaseModel):
     description: str
     due_date: Optional[datetime] = None
     paid: bool = False
+    photo: Optional[str] = None  # base64 image of bill/receipt
     created_at: datetime
 
 class ExpenseCreate(BaseModel):
@@ -137,6 +138,7 @@ class ExpenseCreate(BaseModel):
     description: str
     due_date: Optional[datetime] = None
     paid: Optional[bool] = False
+    photo: Optional[str] = None  # base64 image
 
 class Event(BaseModel):
     event_id: str
@@ -858,6 +860,7 @@ async def create_expense(expense_data: ExpenseCreate, authorization: Optional[st
         "description": expense_data.description,
         "due_date": expense_data.due_date,
         "paid": expense_data.paid if expense_data.paid is not None else False,
+        "photo": expense_data.photo,
         "created_at": datetime.now(timezone.utc)
     }
     
@@ -923,6 +926,71 @@ async def delete_expense(expense_id: str, authorization: Optional[str] = Header(
         raise HTTPException(status_code=404, detail="Expense not found")
     
     return {"message": "Expense deleted"}
+
+# ============= BILL STATEMENTS ENDPOINTS =============
+
+class StatementCreate(BaseModel):
+    title: str
+    statement_type: str = "bill"  # bill, bank_statement, invoice
+    amount: Optional[float] = None
+    due_date: Optional[str] = None  # YYYY-MM-DD
+    photo: Optional[str] = None  # base64 image
+    notes: Optional[str] = ""
+    status: Optional[str] = "pending"  # pending, paid, overdue
+
+@api_router.post("/expenses/statements")
+async def create_statement(data: StatementCreate, authorization: Optional[str] = Header(None), request: Request = None):
+    """Upload a bill or bank statement with photo"""
+    user_id = await get_current_user(authorization, request)
+    statement = {
+        "statement_id": str(uuid.uuid4()),
+        "user_id": user_id,
+        "title": data.title,
+        "statement_type": data.statement_type,
+        "amount": data.amount,
+        "due_date": data.due_date,
+        "photo": data.photo,
+        "notes": data.notes,
+        "status": data.status or "pending",
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.bill_statements.insert_one(statement)
+    statement.pop("_id", None)
+    return statement
+
+@api_router.get("/expenses/statements")
+async def get_statements(authorization: Optional[str] = Header(None), request: Request = None):
+    """Get all bill statements for user"""
+    user_id = await get_current_user(authorization, request)
+    statements = await db.bill_statements.find(
+        {"user_id": user_id}, {"_id": 0}
+    ).sort("created_at", -1).to_list(500)
+    return statements
+
+@api_router.put("/expenses/statements/{statement_id}")
+async def update_statement(statement_id: str, updates: Dict[str, Any], authorization: Optional[str] = Header(None), request: Request = None):
+    """Update a statement (mark as paid, etc.)"""
+    user_id = await get_current_user(authorization, request)
+    allowed = {"title", "amount", "due_date", "notes", "status", "photo"}
+    update_data = {k: v for k, v in updates.items() if k in allowed}
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No valid fields")
+    result = await db.bill_statements.update_one(
+        {"statement_id": statement_id, "user_id": user_id}, {"$set": update_data}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Statement not found")
+    updated = await db.bill_statements.find_one({"statement_id": statement_id}, {"_id": 0})
+    return updated
+
+@api_router.delete("/expenses/statements/{statement_id}")
+async def delete_statement(statement_id: str, authorization: Optional[str] = Header(None), request: Request = None):
+    """Delete a statement"""
+    user_id = await get_current_user(authorization, request)
+    result = await db.bill_statements.delete_one({"statement_id": statement_id, "user_id": user_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Statement not found")
+    return {"message": "Statement deleted"}
 
 # ============= EVENT ENDPOINTS =============
 

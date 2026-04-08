@@ -75,6 +75,10 @@ export const api = {
   updateExpense: (id: string, data: any) => apiRequest(`/expenses/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteExpense: (id: string) => apiRequest(`/expenses/${id}`, { method: 'DELETE' }),
   getExpenseSummary: () => apiRequest('/expenses/summary'),
+  getStatements: () => apiRequest('/expenses/statements'),
+  createStatement: (data: any) => apiRequest('/expenses/statements', { method: 'POST', body: JSON.stringify(data) }),
+  updateStatement: (id: string, data: any) => apiRequest(`/expenses/statements/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteStatement: (id: string) => apiRequest(`/expenses/statements/${id}`, { method: 'DELETE' }),
 
   // Events
   getEvents: () => apiRequest('/events'),

@@ -255,6 +255,21 @@ backend:
         agent: "testing"
         comment: "✅ ALL GROCERY ENDPOINTS FULLY FUNCTIONAL! Comprehensive testing completed on 9 endpoints: POST /api/groceries (create items), GET /api/groceries (retrieve items), PUT /api/groceries/{id} (update/check items), DELETE /api/groceries/{id} (delete items), DELETE /api/groceries/clear/checked (clear checked items), POST /api/groceries/receipts (upload receipts), GET /api/groceries/receipts (get receipts), DELETE /api/groceries/receipts/{id} (delete receipts), GET /api/groceries/spending (spending summary). All CRUD operations working perfectly. Receipt upload/management functional. Spending calculations accurate. Authentication working correctly. 100% test success rate."
 
+  - task: "Bill Statements Feature with Photo Support"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Added Bill Statements photo capture feature to Money Tracker. New backend endpoints: POST/GET/PUT/DELETE /api/expenses/statements. Also enhanced Expense model with optional photo field."
+      - working: true
+        agent: "testing"
+        comment: "✅ BILL STATEMENTS FEATURE FULLY FUNCTIONAL! Comprehensive testing completed on all 5 new endpoints: POST /api/expenses/statements (create statements with different types: bill, bank_statement, invoice), GET /api/expenses/statements (retrieve all statements), PUT /api/expenses/statements/{id} (update status to paid), DELETE /api/expenses/statements/{id} (delete statements), POST /api/expenses (enhanced with photo field). Full flow tested successfully: authentication, create multiple statements with different types, update status to paid, verify retrieval, delete statement. All CRUD operations working perfectly. Photo field enhancement working correctly. Authentication working correctly. 100% test success rate (6/6 tests passed)."
+
 frontend:
   - task: "Authentication UI (Login/Register)"
     implemented: true
@@ -346,6 +361,8 @@ agent_communication:
   - agent: "testing"
     message: "✅ COMPREHENSIVE BACKEND TESTING COMPLETED - ALL SYSTEMS OPERATIONAL! Tested 34 endpoints across 9 feature areas: Authentication (register/login/logout), Task Management with AI prioritization, Habit Tracking with streaks, Focus Sessions (Pomodoro), Medications, Expense/Bill tracking with summaries, Events, Birthdays, Routines, and AI focus tips. All CRUD operations working perfectly. AI integration functional (minor budget limit reached but fallback working). 100% success rate on all tests. Backend is production-ready."
   - agent: "main"
-    message: "Added Grocery List + Receipt Tracker feature. 8 new backend endpoints: GET/POST/PUT/DELETE grocery items, DELETE clear checked, POST/GET/DELETE receipts, GET spending summary. Frontend grocery.tsx screen with Shopping List and Receipts tabs. Please test the new grocery endpoints specifically: POST /api/groceries, GET /api/groceries, PUT /api/groceries/{id}, DELETE /api/groceries/{id}, DELETE /api/groceries/clear/checked, POST /api/groceries/receipts, GET /api/groceries/receipts, DELETE /api/groceries/receipts/{id}, GET /api/groceries/spending. Auth: test@example.com / password123"
+    message: "Added Grocery List + Receipt Tracker. Tested and passing. Now added Bill Statements photo capture feature to Money Tracker. New backend endpoints: POST/GET/PUT/DELETE /api/expenses/statements. Also enhanced Expense model with optional photo field. Please test ONLY the new bill statements endpoints: POST /api/expenses/statements (body: {\"title\": \"Electric Bill\", \"statement_type\": \"bill\", \"amount\": 120.50, \"due_date\": \"2026-05-01\", \"photo\": null, \"notes\": \"Monthly electric\", \"status\": \"pending\"}), GET /api/expenses/statements, PUT /api/expenses/statements/{id} (body: {\"status\": \"paid\"}), DELETE /api/expenses/statements/{id}. Also test creating expense with photo field: POST /api/expenses (body: {\"type\": \"bill\", \"amount\": 99.99, \"category\": \"Utilities\", \"description\": \"Water bill\", \"photo\": null}). Auth: test@example.com / password123"
   - agent: "testing"
     message: "✅ GROCERY LIST AND RECEIPT TRACKER TESTING COMPLETE - 100% SUCCESS! Tested all 9 grocery endpoints with comprehensive flow: Authentication working correctly, grocery item CRUD operations (create, read, update, delete) all functional, item checking/unchecking working, bulk clear checked items working, receipt upload/management fully operational, spending summary calculations accurate. All endpoints returning proper responses with correct data. No issues found. Backend grocery functionality is production-ready."
+  - agent: "testing"
+    message: "✅ BILL STATEMENTS FEATURE TESTING COMPLETE - 100% SUCCESS! Comprehensive testing completed on all 5 new endpoints with full flow as requested: 1) POST /api/expenses/statements (created 3 statements with different types: bill, bank_statement, invoice), 2) GET /api/expenses/statements (retrieved all statements correctly), 3) PUT /api/expenses/statements/{id} (updated status to paid successfully), 4) DELETE /api/expenses/statements/{id} (deleted statement and verified removal), 5) POST /api/expenses (enhanced expense creation with photo field working). Authentication working correctly. All CRUD operations functional. Data persistence verified. Photo field enhancement working. 6/6 tests passed. Bill Statements feature is production-ready."
