@@ -161,4 +161,9 @@ export const api = {
   uploadGroceryReceipt: (data: any) => apiRequest('/groceries/receipts', { method: 'POST', body: JSON.stringify(data) }),
   deleteGroceryReceipt: (id: string) => apiRequest(`/groceries/receipts/${id}`, { method: 'DELETE' }),
   getGrocerySpending: () => apiRequest('/groceries/spending'),
+
+  // Yoga Sessions
+  logYogaSession: (data: any) => apiRequest('/yoga/log', { method: 'POST', body: JSON.stringify(data) }),
+  getYogaLogs: () => apiRequest('/yoga/logs'),
+  deleteYogaLog: (id: string) => apiRequest(`/yoga/logs/${id}`, { method: 'DELETE' }),
 };

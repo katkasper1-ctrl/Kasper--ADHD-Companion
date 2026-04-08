@@ -2152,6 +2152,52 @@ async def get_grocery_spending(authorization: Optional[str] = Header(None), requ
         "receipt_count": receipt_count
     }
 
+# ============= YOGA SESSION ENDPOINTS =============
+
+class YogaSessionCreate(BaseModel):
+    pose_id: str
+    pose_name: str
+    duration_minutes: int
+    body_feeling: str  # emoji or text
+    feeling_notes: Optional[str] = ""
+
+@api_router.post("/yoga/log")
+async def log_yoga_session(data: YogaSessionCreate, authorization: Optional[str] = Header(None), request: Request = None):
+    """Log a completed yoga session"""
+    user_id = await get_current_user(authorization, request)
+    session = {
+        "session_id": str(uuid.uuid4()),
+        "user_id": user_id,
+        "pose_id": data.pose_id,
+        "pose_name": data.pose_name,
+        "duration_minutes": data.duration_minutes,
+        "body_feeling": data.body_feeling,
+        "feeling_notes": data.feeling_notes or "",
+        "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.yoga_sessions.insert_one(session)
+    session.pop("_id", None)
+    return session
+
+@api_router.get("/yoga/logs")
+async def get_yoga_logs(authorization: Optional[str] = Header(None), request: Request = None):
+    """Get all yoga session logs for user"""
+    user_id = await get_current_user(authorization, request)
+    logs = await db.yoga_sessions.find(
+        {"user_id": user_id}, {"_id": 0}
+    ).sort("created_at", -1).to_list(500)
+    return logs
+
+@api_router.delete("/yoga/logs/{session_id}")
+async def delete_yoga_log(session_id: str, authorization: Optional[str] = Header(None), request: Request = None):
+    """Delete a yoga session log"""
+    user_id = await get_current_user(authorization, request)
+    result = await db.yoga_sessions.delete_one({"session_id": session_id, "user_id": user_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Yoga session not found")
+    return {"message": "Yoga session deleted"}
+
 # ============= AI ENDPOINTS =============
 
 @api_router.post("/ai/focus-tip")

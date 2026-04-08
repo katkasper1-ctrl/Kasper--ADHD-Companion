@@ -1,326 +1,261 @@
 #!/usr/bin/env python3
-"""
-Backend Test Suite for Bill Statements Feature
-Testing the newly added Bill Statements endpoints in the Money Tracker
-"""
 
 import requests
 import json
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime
 
 # Configuration
-BASE_URL = "https://adhd-companion-18.preview.emergentagent.com/api"
+BACKEND_URL = "https://adhd-companion-18.preview.emergentagent.com/api"
 TEST_EMAIL = "test@example.com"
 TEST_PASSWORD = "password123"
 
-class BillStatementsTest:
+class YogaSessionTester:
     def __init__(self):
         self.session = requests.Session()
         self.auth_token = None
-        self.created_statements = []
+        self.test_results = []
         
-    def log(self, message, level="INFO"):
-        """Log test messages"""
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        print(f"[{timestamp}] {level}: {message}")
-        
-    def login(self):
-        """Authenticate and get JWT token"""
-        self.log("🔐 Testing authentication...")
-        
-        login_data = {
-            "email": TEST_EMAIL,
-            "password": TEST_PASSWORD
-        }
-        
+    def log_test(self, test_name, success, details=""):
+        """Log test results"""
+        status = "✅ PASS" if success else "❌ FAIL"
+        self.test_results.append({
+            "test": test_name,
+            "status": status,
+            "success": success,
+            "details": details
+        })
+        print(f"{status}: {test_name}")
+        if details:
+            print(f"   Details: {details}")
+    
+    def authenticate(self):
+        """Login and get auth token"""
         try:
-            response = self.session.post(f"{BASE_URL}/auth/login", json=login_data)
+            login_data = {
+                "email": TEST_EMAIL,
+                "password": TEST_PASSWORD
+            }
+            
+            response = self.session.post(f"{BACKEND_URL}/auth/login", json=login_data)
             
             if response.status_code == 200:
                 data = response.json()
                 self.auth_token = data.get("token")
                 if self.auth_token:
                     self.session.headers.update({"Authorization": f"Bearer {self.auth_token}"})
-                    self.log("✅ Authentication successful")
+                    self.log_test("Authentication", True, f"Successfully logged in as {TEST_EMAIL}")
                     return True
                 else:
-                    self.log("❌ No access token in response", "ERROR")
+                    self.log_test("Authentication", False, "No access token in response")
                     return False
             else:
-                self.log(f"❌ Login failed: {response.status_code} - {response.text}", "ERROR")
+                self.log_test("Authentication", False, f"Login failed: {response.status_code} - {response.text}")
                 return False
                 
         except Exception as e:
-            self.log(f"❌ Login error: {str(e)}", "ERROR")
+            self.log_test("Authentication", False, f"Login error: {str(e)}")
             return False
     
-    def test_create_statements(self):
-        """Test creating multiple bill statements with different types"""
-        self.log("📄 Testing bill statement creation...")
-        
-        # Test data for different statement types
-        test_statements = [
-            {
-                "title": "Electric Bill - January 2026",
-                "statement_type": "bill",
-                "amount": 120.50,
-                "due_date": "2026-02-15",
-                "photo": None,
-                "notes": "Monthly electric bill from ConEd",
-                "status": "pending"
-            },
-            {
-                "title": "Bank Statement - December 2025",
-                "statement_type": "bank_statement",
-                "amount": None,
-                "due_date": None,
-                "photo": None,
-                "notes": "Monthly bank statement for review",
-                "status": "pending"
-            },
-            {
-                "title": "Internet Service Invoice",
-                "statement_type": "invoice",
-                "amount": 89.99,
-                "due_date": "2026-02-01",
-                "photo": None,
-                "notes": "Monthly internet service from Verizon",
-                "status": "pending"
-            }
-        ]
-        
-        success_count = 0
-        
-        for i, statement_data in enumerate(test_statements, 1):
-            try:
-                response = self.session.post(f"{BASE_URL}/expenses/statements", json=statement_data)
-                
-                if response.status_code == 200:
-                    created_statement = response.json()
-                    self.created_statements.append(created_statement)
-                    self.log(f"✅ Statement {i} created: {created_statement['title']} (ID: {created_statement['statement_id']})")
-                    success_count += 1
-                    
-                    # Verify response structure
-                    required_fields = ["statement_id", "user_id", "title", "statement_type", "status", "created_at"]
-                    for field in required_fields:
-                        if field not in created_statement:
-                            self.log(f"⚠️ Missing field '{field}' in response", "WARNING")
-                else:
-                    self.log(f"❌ Failed to create statement {i}: {response.status_code} - {response.text}", "ERROR")
-                    
-            except Exception as e:
-                self.log(f"❌ Error creating statement {i}: {str(e)}", "ERROR")
-        
-        self.log(f"📊 Statement creation results: {success_count}/{len(test_statements)} successful")
-        return success_count == len(test_statements)
-    
-    def test_get_statements(self):
-        """Test retrieving all statements"""
-        self.log("📋 Testing statement retrieval...")
-        
+    def test_log_yoga_session(self, session_data):
+        """Test logging a yoga session"""
         try:
-            response = self.session.get(f"{BASE_URL}/expenses/statements")
+            response = self.session.post(f"{BACKEND_URL}/yoga/log", json=session_data)
             
             if response.status_code == 200:
-                statements = response.json()
-                self.log(f"✅ Retrieved {len(statements)} statements")
-                
-                # Verify our created statements are in the list
-                created_ids = {stmt['statement_id'] for stmt in self.created_statements}
-                retrieved_ids = {stmt['statement_id'] for stmt in statements}
-                
-                if created_ids.issubset(retrieved_ids):
-                    self.log("✅ All created statements found in retrieval")
-                    
-                    # Display statement details
-                    for stmt in statements:
-                        if stmt['statement_id'] in created_ids:
-                            self.log(f"   📄 {stmt['title']} - {stmt['statement_type']} - Status: {stmt['status']}")
-                    
-                    return True
+                data = response.json()
+                session_id = data.get("session_id")
+                if session_id:
+                    self.log_test(f"Log Yoga Session - {session_data['pose_name']}", True, 
+                                f"Session logged with ID: {session_id}")
+                    return session_id
                 else:
-                    missing = created_ids - retrieved_ids
-                    self.log(f"❌ Missing statements in retrieval: {missing}", "ERROR")
-                    return False
+                    self.log_test(f"Log Yoga Session - {session_data['pose_name']}", False, 
+                                "No session_id in response")
+                    return None
             else:
-                self.log(f"❌ Failed to retrieve statements: {response.status_code} - {response.text}", "ERROR")
-                return False
+                self.log_test(f"Log Yoga Session - {session_data['pose_name']}", False, 
+                            f"Failed: {response.status_code} - {response.text}")
+                return None
                 
         except Exception as e:
-            self.log(f"❌ Error retrieving statements: {str(e)}", "ERROR")
-            return False
+            self.log_test(f"Log Yoga Session - {session_data['pose_name']}", False, f"Error: {str(e)}")
+            return None
     
-    def test_update_statement(self):
-        """Test updating statement status to paid"""
-        self.log("✏️ Testing statement status update...")
-        
-        if not self.created_statements:
-            self.log("❌ No statements to update", "ERROR")
-            return False
-        
-        # Update the first statement to "paid"
-        statement_to_update = self.created_statements[0]
-        statement_id = statement_to_update['statement_id']
-        
-        update_data = {"status": "paid"}
-        
+    def test_get_yoga_logs(self, expected_count=None):
+        """Test retrieving yoga session logs"""
         try:
-            response = self.session.put(f"{BASE_URL}/expenses/statements/{statement_id}", json=update_data)
+            response = self.session.get(f"{BACKEND_URL}/yoga/logs")
             
             if response.status_code == 200:
-                updated_statement = response.json()
-                
-                if updated_statement['status'] == 'paid':
-                    self.log(f"✅ Statement updated successfully: {updated_statement['title']} is now PAID")
-                    return True
+                logs = response.json()
+                if isinstance(logs, list):
+                    count = len(logs)
+                    details = f"Retrieved {count} yoga sessions"
+                    if expected_count is not None:
+                        if count == expected_count:
+                            details += f" (expected {expected_count})"
+                        else:
+                            self.log_test("Get Yoga Logs", False, 
+                                        f"Expected {expected_count} sessions, got {count}")
+                            return logs
+                    
+                    self.log_test("Get Yoga Logs", True, details)
+                    return logs
                 else:
-                    self.log(f"❌ Status not updated correctly: expected 'paid', got '{updated_statement['status']}'", "ERROR")
-                    return False
+                    self.log_test("Get Yoga Logs", False, "Response is not a list")
+                    return None
             else:
-                self.log(f"❌ Failed to update statement: {response.status_code} - {response.text}", "ERROR")
-                return False
+                self.log_test("Get Yoga Logs", False, f"Failed: {response.status_code} - {response.text}")
+                return None
                 
         except Exception as e:
-            self.log(f"❌ Error updating statement: {str(e)}", "ERROR")
-            return False
+            self.log_test("Get Yoga Logs", False, f"Error: {str(e)}")
+            return None
     
-    def test_delete_statement(self):
-        """Test deleting a statement"""
-        self.log("🗑️ Testing statement deletion...")
-        
-        if len(self.created_statements) < 2:
-            self.log("❌ Need at least 2 statements to test deletion", "ERROR")
-            return False
-        
-        # Delete the last statement
-        statement_to_delete = self.created_statements[-1]
-        statement_id = statement_to_delete['statement_id']
-        
+    def test_delete_yoga_session(self, session_id):
+        """Test deleting a yoga session"""
         try:
-            response = self.session.delete(f"{BASE_URL}/expenses/statements/{statement_id}")
+            response = self.session.delete(f"{BACKEND_URL}/yoga/logs/{session_id}")
             
             if response.status_code == 200:
-                result = response.json()
-                self.log(f"✅ Statement deleted successfully: {statement_to_delete['title']}")
-                
-                # Verify deletion by trying to retrieve all statements
-                get_response = self.session.get(f"{BASE_URL}/expenses/statements")
-                if get_response.status_code == 200:
-                    remaining_statements = get_response.json()
-                    remaining_ids = {stmt['statement_id'] for stmt in remaining_statements}
-                    
-                    if statement_id not in remaining_ids:
-                        self.log("✅ Statement successfully removed from database")
-                        return True
-                    else:
-                        self.log("❌ Statement still exists after deletion", "ERROR")
-                        return False
-                else:
-                    self.log("⚠️ Could not verify deletion", "WARNING")
-                    return True  # Assume success since delete returned 200
+                data = response.json()
+                message = data.get("message", "")
+                self.log_test("Delete Yoga Session", True, f"Session deleted: {message}")
+                return True
             else:
-                self.log(f"❌ Failed to delete statement: {response.status_code} - {response.text}", "ERROR")
+                self.log_test("Delete Yoga Session", False, 
+                            f"Failed: {response.status_code} - {response.text}")
                 return False
                 
         except Exception as e:
-            self.log(f"❌ Error deleting statement: {str(e)}", "ERROR")
+            self.log_test("Delete Yoga Session", False, f"Error: {str(e)}")
             return False
     
-    def test_enhanced_expense_creation(self):
-        """Test creating expense with new photo field"""
-        self.log("💰 Testing enhanced expense creation with photo field...")
+    def run_comprehensive_test(self):
+        """Run the complete yoga session tracker test flow"""
+        print("=" * 60)
+        print("YOGA SESSION TRACKER COMPREHENSIVE TEST")
+        print("=" * 60)
         
-        expense_data = {
-            "type": "bill",
-            "amount": 99.99,
-            "category": "Utilities",
-            "description": "Water bill with photo support",
-            "photo": None
+        # Step 1: Authenticate
+        if not self.authenticate():
+            print("❌ Authentication failed. Cannot proceed with tests.")
+            return False
+        
+        # Step 2: Log first yoga session
+        session1_data = {
+            "pose_id": "childs_pose",
+            "pose_name": "Child's Pose",
+            "duration_minutes": 10,
+            "body_feeling": "relaxed",
+            "feeling_notes": "My back feels much better after this"
         }
         
-        try:
-            response = self.session.post(f"{BASE_URL}/expenses", json=expense_data)
-            
-            if response.status_code == 200:
-                created_expense = response.json()
-                self.log(f"✅ Enhanced expense created successfully: {created_expense['description']}")
-                
-                # Verify photo field is present
-                if 'photo' in created_expense:
-                    self.log("✅ Photo field present in expense response")
-                    return True
-                else:
-                    self.log("⚠️ Photo field missing from expense response", "WARNING")
-                    return True  # Still consider success if expense was created
-            else:
-                self.log(f"❌ Failed to create enhanced expense: {response.status_code} - {response.text}", "ERROR")
-                return False
-                
-        except Exception as e:
-            self.log(f"❌ Error creating enhanced expense: {str(e)}", "ERROR")
+        session1_id = self.test_log_yoga_session(session1_data)
+        if not session1_id:
+            print("❌ Failed to log first session. Cannot proceed.")
             return False
-    
-    def run_all_tests(self):
-        """Run the complete test suite"""
-        self.log("🚀 Starting Bill Statements Feature Test Suite")
-        self.log("=" * 60)
         
-        # Test results tracking
-        test_results = {}
+        # Step 3: Log second yoga session
+        session2_data = {
+            "pose_id": "warrior_pose",
+            "pose_name": "Warrior II",
+            "duration_minutes": 5,
+            "body_feeling": "strong",
+            "feeling_notes": "Legs feel stronger"
+        }
         
-        # 1. Authentication
-        test_results['authentication'] = self.login()
-        if not test_results['authentication']:
-            self.log("❌ Authentication failed - cannot proceed with tests", "ERROR")
-            return test_results
+        session2_id = self.test_log_yoga_session(session2_data)
+        if not session2_id:
+            print("❌ Failed to log second session. Cannot proceed.")
+            return False
         
-        # 2. Create statements
-        test_results['create_statements'] = self.test_create_statements()
+        # Step 4: Verify both sessions appear in logs
+        logs = self.test_get_yoga_logs(expected_count=2)
+        if logs is None:
+            print("❌ Failed to retrieve logs after logging sessions.")
+            return False
         
-        # 3. Get statements
-        test_results['get_statements'] = self.test_get_statements()
-        
-        # 4. Update statement
-        test_results['update_statement'] = self.test_update_statement()
-        
-        # 5. Delete statement
-        test_results['delete_statement'] = self.test_delete_statement()
-        
-        # 6. Enhanced expense creation
-        test_results['enhanced_expense'] = self.test_enhanced_expense_creation()
-        
-        # Summary
-        self.log("=" * 60)
-        self.log("📊 TEST RESULTS SUMMARY:")
-        
-        passed = 0
-        total = len(test_results)
-        
-        for test_name, result in test_results.items():
-            status = "✅ PASS" if result else "❌ FAIL"
-            self.log(f"   {test_name.replace('_', ' ').title()}: {status}")
-            if result:
-                passed += 1
-        
-        self.log(f"\n🎯 Overall Result: {passed}/{total} tests passed")
-        
-        if passed == total:
-            self.log("🎉 ALL TESTS PASSED - Bill Statements feature is working correctly!")
+        # Verify session data
+        session_ids = [log.get("session_id") for log in logs]
+        if session1_id in session_ids and session2_id in session_ids:
+            self.log_test("Verify Both Sessions Present", True, 
+                        f"Both sessions found in logs: {session1_id}, {session2_id}")
         else:
-            self.log("⚠️ Some tests failed - see details above")
+            self.log_test("Verify Both Sessions Present", False, 
+                        f"Sessions not found. Expected: {session1_id}, {session2_id}. Found: {session_ids}")
         
-        return test_results
+        # Step 5: Delete one session
+        if not self.test_delete_yoga_session(session1_id):
+            print("❌ Failed to delete session. Cannot proceed.")
+            return False
+        
+        # Step 6: Verify only one session remains
+        final_logs = self.test_get_yoga_logs(expected_count=1)
+        if final_logs is not None:
+            remaining_ids = [log.get("session_id") for log in final_logs]
+            if session2_id in remaining_ids and session1_id not in remaining_ids:
+                self.log_test("Verify Session Deletion", True, 
+                            f"Correct session remains: {session2_id}")
+            else:
+                self.log_test("Verify Session Deletion", False, 
+                            f"Unexpected sessions remain: {remaining_ids}")
+        
+        # Clean up - delete remaining session
+        if session2_id:
+            self.test_delete_yoga_session(session2_id)
+        
+        return True
+    
+    def print_summary(self):
+        """Print test summary"""
+        print("\n" + "=" * 60)
+        print("TEST SUMMARY")
+        print("=" * 60)
+        
+        total_tests = len(self.test_results)
+        passed_tests = sum(1 for result in self.test_results if result["success"])
+        failed_tests = total_tests - passed_tests
+        
+        print(f"Total Tests: {total_tests}")
+        print(f"Passed: {passed_tests}")
+        print(f"Failed: {failed_tests}")
+        print(f"Success Rate: {(passed_tests/total_tests)*100:.1f}%")
+        
+        if failed_tests > 0:
+            print("\nFAILED TESTS:")
+            for result in self.test_results:
+                if not result["success"]:
+                    print(f"❌ {result['test']}: {result['details']}")
+        
+        print("\nALL TEST RESULTS:")
+        for result in self.test_results:
+            print(f"{result['status']}: {result['test']}")
+            if result['details']:
+                print(f"   {result['details']}")
 
 def main():
     """Main test execution"""
-    tester = BillStatementsTest()
-    results = tester.run_all_tests()
+    tester = YogaSessionTester()
     
-    # Exit with appropriate code
-    all_passed = all(results.values())
-    sys.exit(0 if all_passed else 1)
+    try:
+        success = tester.run_comprehensive_test()
+        tester.print_summary()
+        
+        if success and all(result["success"] for result in tester.test_results):
+            print("\n🎉 ALL YOGA SESSION TRACKER TESTS PASSED!")
+            sys.exit(0)
+        else:
+            print("\n⚠️  SOME TESTS FAILED!")
+            sys.exit(1)
+            
+    except KeyboardInterrupt:
+        print("\n\nTest interrupted by user.")
+        sys.exit(1)
+    except Exception as e:
+        print(f"\n\nUnexpected error during testing: {str(e)}")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
