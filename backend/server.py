@@ -313,6 +313,26 @@ class NoteUpdate(BaseModel):
     pinned: Optional[bool] = None
     tags: Optional[List[str]] = None
 
+class Chore(BaseModel):
+    chore_id: str
+    user_id: str
+    name: str
+    description: Optional[str] = ""
+    frequency: str = "weekly"  # daily, weekly, monthly
+    days: List[str] = []  # for weekly: ["mon", "wed", "fri"]
+    room: Optional[str] = ""
+    completed_dates: List[datetime] = []
+    last_completed: Optional[datetime] = None
+    current_streak: int = 0
+    created_at: datetime
+
+class ChoreCreate(BaseModel):
+    name: str
+    description: Optional[str] = ""
+    frequency: str = "weekly"
+    days: Optional[List[str]] = []
+    room: Optional[str] = ""
+
 # ============= HELPERS =============
 
 def hash_password(password: str) -> str:
@@ -1554,6 +1574,127 @@ async def delete_note(note_id: str, authorization: Optional[str] = Header(None),
         raise HTTPException(status_code=404, detail="Note not found")
     
     return {"message": "Note deleted"}
+
+# ============= CHORES ENDPOINTS =============
+
+@api_router.post("/chores", response_model=Chore)
+async def create_chore(chore_data: ChoreCreate, authorization: Optional[str] = Header(None), request: Request = None):
+    """Create a new chore"""
+    user_id = await get_current_user(authorization, request)
+    
+    chore_id = f"chore_{uuid.uuid4().hex[:12]}"
+    chore = {
+        "chore_id": chore_id,
+        "user_id": user_id,
+        "name": chore_data.name,
+        "description": chore_data.description or "",
+        "frequency": chore_data.frequency,
+        "days": chore_data.days or [],
+        "room": chore_data.room or "",
+        "completed_dates": [],
+        "last_completed": None,
+        "current_streak": 0,
+        "created_at": datetime.now(timezone.utc)
+    }
+    
+    await db.chores.insert_one(chore)
+    return Chore(**chore)
+
+@api_router.get("/chores", response_model=List[Chore])
+async def get_chores(authorization: Optional[str] = Header(None), request: Request = None):
+    """Get all chores"""
+    user_id = await get_current_user(authorization, request)
+    
+    chores = await db.chores.find({"user_id": user_id}, {"_id": 0}).to_list(1000)
+    return [Chore(**chore) for chore in chores]
+
+@api_router.post("/chores/{chore_id}/complete")
+async def complete_chore(chore_id: str, authorization: Optional[str] = Header(None), request: Request = None):
+    """Mark chore as completed"""
+    user_id = await get_current_user(authorization, request)
+    
+    chore = await db.chores.find_one({"chore_id": chore_id, "user_id": user_id}, {"_id": 0})
+    if not chore:
+        raise HTTPException(status_code=404, detail="Chore not found")
+    
+    now = datetime.now(timezone.utc)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    # Check if already completed today
+    completed_dates = chore.get("completed_dates", [])
+    today_completions = [d for d in completed_dates if isinstance(d, datetime) and d >= today_start]
+    
+    if today_completions:
+        return {"message": "Already completed today", "chore": Chore(**chore)}
+    
+    # Add completion
+    completed_dates.append(now)
+    
+    # Calculate streak
+    current_streak = 1
+    check_date = today_start
+    sorted_dates = sorted([d for d in completed_dates if isinstance(d, datetime)], reverse=True)
+    
+    for i in range(len(sorted_dates) - 1):
+        prev_day = check_date - timedelta(days=1)
+        prev_day_completions = [d for d in sorted_dates if d.date() == prev_day.date()]
+        if prev_day_completions:
+            current_streak += 1
+            check_date = prev_day
+        else:
+            break
+    
+    await db.chores.update_one(
+        {"chore_id": chore_id},
+        {"$set": {
+            "completed_dates": completed_dates,
+            "last_completed": now,
+            "current_streak": current_streak
+        }}
+    )
+    
+    updated_chore = await db.chores.find_one({"chore_id": chore_id}, {"_id": 0})
+    return {"message": "Chore completed!", "chore": Chore(**updated_chore)}
+
+@api_router.get("/chores/today")
+async def get_today_chores(authorization: Optional[str] = Header(None), request: Request = None):
+    """Get today's chores (based on frequency)"""
+    user_id = await get_current_user(authorization, request)
+    
+    all_chores = await db.chores.find({"user_id": user_id}, {"_id": 0}).to_list(1000)
+    
+    today = datetime.now(timezone.utc)
+    today_start = today.replace(hour=0, minute=0, second=0, microsecond=0)
+    day_name = today.strftime("%a").lower()[:3]  # "mon", "tue", etc.
+    
+    today_chores = []
+    for chore in all_chores:
+        # Check if due today based on frequency
+        if chore["frequency"] == "daily":
+            today_chores.append(chore)
+        elif chore["frequency"] == "weekly" and day_name in chore.get("days", []):
+            today_chores.append(chore)
+        elif chore["frequency"] == "monthly" and today.day == 1:
+            today_chores.append(chore)
+    
+    # Mark which are completed today
+    for chore in today_chores:
+        completed_dates = chore.get("completed_dates", [])
+        today_completions = [d for d in completed_dates if isinstance(d, datetime) and d >= today_start]
+        chore["completed_today"] = len(today_completions) > 0
+    
+    return today_chores
+
+@api_router.delete("/chores/{chore_id}")
+async def delete_chore(chore_id: str, authorization: Optional[str] = Header(None), request: Request = None):
+    """Delete a chore"""
+    user_id = await get_current_user(authorization, request)
+    
+    result = await db.chores.delete_one({"chore_id": chore_id, "user_id": user_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Chore not found")
+    
+    return {"message": "Chore deleted"}
 
 # ============= AI ENDPOINTS =============
 

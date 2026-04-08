@@ -130,4 +130,11 @@ export const api = {
   createNote: (data: any) => apiRequest('/notes', { method: 'POST', body: JSON.stringify(data) }),
   updateNote: (id: string, data: any) => apiRequest(`/notes/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteNote: (id: string) => apiRequest(`/notes/${id}`, { method: 'DELETE' }),
+
+  // Chores
+  getChores: () => apiRequest('/chores'),
+  getTodayChores: () => apiRequest('/chores/today'),
+  createChore: (data: any) => apiRequest('/chores', { method: 'POST', body: JSON.stringify(data) }),
+  completeChore: (id: string) => apiRequest(`/chores/${id}/complete`, { method: 'POST' }),
+  deleteChore: (id: string) => apiRequest(`/chores/${id}`, { method: 'DELETE' }),
 };

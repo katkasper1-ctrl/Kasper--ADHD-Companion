@@ -43,6 +43,7 @@ export default function RootLayout() {
       <Stack.Screen name="mood" />
       <Stack.Screen name="school" />
       <Stack.Screen name="notes" />
+      <Stack.Screen name="chores" />
     </Stack>
   );
 }
