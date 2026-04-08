@@ -2622,6 +2622,405 @@ async def get_focus_tip(authorization: Optional[str] = Header(None), request: Re
     tip = await get_ai_suggestion(prompt, context)
     return {"tip": tip}
 
+# ============= FIRST AID ENDPOINTS =============
+
+FIRST_AID_GUIDES = [
+    {
+        "guide_id": "cpr",
+        "title": "CPR (Cardiopulmonary Resuscitation)",
+        "category": "life_threatening",
+        "icon": "heart-circle",
+        "color": "#E74C3C",
+        "severity": "critical",
+        "image_url": "https://images.unsplash.com/photo-1622551546704-36926ae49878?w=800&q=80",
+        "call_911": True,
+        "when_to_call_911": "Call 911 IMMEDIATELY if someone is unresponsive and not breathing normally.",
+        "overview": "CPR is a life-saving technique used when someone's heart stops beating. It combines chest compressions and rescue breaths to keep blood flowing.",
+        "steps": [
+            {"step_number": 1, "title": "Check Responsiveness", "description": "Tap the person's shoulders firmly and shout 'Are you okay?' Check for normal breathing for no more than 10 seconds.", "tip": "Look for chest rise and fall. Gasping is NOT normal breathing."},
+            {"step_number": 2, "title": "Call for Help", "description": "Call 911 or ask someone nearby to call. If alone, put the phone on speaker.", "tip": "Ask someone to bring an AED (defibrillator) if available."},
+            {"step_number": 3, "title": "Position Your Hands", "description": "Place the heel of one hand on the center of the chest (on the breastbone). Place your other hand on top, interlocking fingers.", "tip": "Keep your arms straight and shoulders directly over your hands."},
+            {"step_number": 4, "title": "Give 30 Chest Compressions", "description": "Push hard and fast, at least 2 inches deep. Compress at a rate of 100-120 compressions per minute.", "tip": "Think of the beat of 'Stayin' Alive' by the Bee Gees for the right rhythm."},
+            {"step_number": 5, "title": "Give 2 Rescue Breaths", "description": "Tilt the head back, lift the chin, pinch the nose. Give 2 breaths, each lasting about 1 second. Watch for chest rise.", "tip": "If you're not trained in rescue breaths, continue with hands-only CPR (compressions only)."},
+            {"step_number": 6, "title": "Repeat", "description": "Continue cycles of 30 compressions and 2 breaths until help arrives or the person starts breathing.", "tip": "Switch with another person every 2 minutes to maintain effective compressions."}
+        ],
+        "do_nots": [
+            "Don't stop CPR unless the person shows signs of life or medical help takes over",
+            "Don't compress too shallow - push at least 2 inches deep",
+            "Don't lean on the chest between compressions - allow full recoil",
+            "Don't interrupt compressions for more than 10 seconds"
+        ],
+        "important_notes": [
+            "Hands-only CPR (no breaths) is still effective and recommended for untrained bystanders",
+            "For infants, use two fingers instead of full hands",
+            "For children (1-8 years), use one or two hands depending on the child's size",
+            "AED use should be combined with CPR when available"
+        ]
+    },
+    {
+        "guide_id": "burns",
+        "title": "Burns Treatment",
+        "category": "injuries",
+        "icon": "flame",
+        "color": "#FF6B35",
+        "severity": "moderate",
+        "image_url": "https://images.unsplash.com/photo-1609840534195-e6385ca0d10a?w=800&q=80",
+        "call_911": False,
+        "when_to_call_911": "Call 911 for burns larger than the palm of your hand, chemical/electrical burns, burns on face/hands/feet/genitals, or burns that go all the way around an arm/leg.",
+        "overview": "Burns are classified by degree: 1st degree (red skin), 2nd degree (blisters), 3rd degree (white/charred). Quick cooling is essential.",
+        "steps": [
+            {"step_number": 1, "title": "Remove from Heat Source", "description": "Move the person away from the heat source. Remove clothing and jewelry near the burn UNLESS stuck to the skin.", "tip": "If clothing is stuck, don't pull it off - cut around it."},
+            {"step_number": 2, "title": "Cool the Burn", "description": "Hold the burned area under cool (NOT cold/ice) running water for at least 10-20 minutes.", "tip": "Use a clean, cool wet cloth if running water isn't available. Never use ice or icy water."},
+            {"step_number": 3, "title": "Protect the Burn", "description": "After cooling, cover with a sterile, non-stick bandage or clean cloth. Wrap loosely.", "tip": "Cling film makes a good temporary cover - lay it over, don't wrap tightly."},
+            {"step_number": 4, "title": "Manage Pain", "description": "Take over-the-counter pain relievers like ibuprofen or acetaminophen as directed.", "tip": "Aloe vera gel can also soothe minor burns after cooling."},
+            {"step_number": 5, "title": "Watch for Infection", "description": "Keep the burn clean and dry. Watch for signs of infection: increasing pain, redness, swelling, fever, or oozing.", "tip": "Change the dressing daily and wash your hands before touching the burn."}
+        ],
+        "do_nots": [
+            "Don't use ice, butter, toothpaste, or any home remedies on burns",
+            "Don't pop blisters - they protect against infection",
+            "Don't remove clothing stuck to the burn",
+            "Don't use fluffy cotton or adhesive bandages directly on burns"
+        ],
+        "important_notes": [
+            "Chemical burns: Brush off dry chemicals, then flush with water for 20+ minutes",
+            "Electrical burns: Don't touch the person until the power source is off",
+            "Sunburn: Cool the skin, moisturize, and stay hydrated",
+            "Seek medical help for any burn on a child under 5"
+        ]
+    },
+    {
+        "guide_id": "cuts_wounds",
+        "title": "Cuts & Wound Care",
+        "category": "injuries",
+        "icon": "bandage",
+        "color": "#E91E63",
+        "severity": "mild",
+        "image_url": "https://images.unsplash.com/photo-1600531105235-7a82db92fc46?w=800&q=80",
+        "call_911": False,
+        "when_to_call_911": "Call 911 if bleeding doesn't stop after 15 minutes of pressure, the wound is very deep or has exposed bone/muscle, or if caused by an animal bite.",
+        "overview": "Most minor cuts and scrapes can be treated at home. The key is to stop bleeding, clean the wound, and protect it from infection.",
+        "steps": [
+            {"step_number": 1, "title": "Wash Your Hands", "description": "Clean your hands with soap and water or use hand sanitizer before touching the wound.", "tip": "Wear disposable gloves if available, especially for someone else's wound."},
+            {"step_number": 2, "title": "Stop the Bleeding", "description": "Apply firm, steady pressure with a clean cloth or bandage. Keep pressure on for at least 5-10 minutes without peeking.", "tip": "Elevate the injured area above the heart if possible to slow bleeding."},
+            {"step_number": 3, "title": "Clean the Wound", "description": "Rinse the wound under clean running water for 5-10 minutes. Use mild soap around (not in) the wound.", "tip": "Remove any visible debris with clean tweezers sterilized with rubbing alcohol."},
+            {"step_number": 4, "title": "Apply Antibiotic", "description": "Apply a thin layer of antibiotic ointment (like Neosporin) to help prevent infection.", "tip": "Skip this step if you're allergic to antibiotic ointments."},
+            {"step_number": 5, "title": "Cover the Wound", "description": "Cover with a sterile adhesive bandage or gauze pad. Change the dressing daily or whenever it gets wet or dirty.", "tip": "For small cuts, butterfly bandages or adhesive strips can help hold edges together."},
+            {"step_number": 6, "title": "Watch for Infection", "description": "Monitor for increasing redness, warmth, swelling, drainage, or fever over the next few days.", "tip": "Get a tetanus shot if your last one was more than 5 years ago and the wound is deep or dirty."}
+        ],
+        "do_nots": [
+            "Don't use hydrogen peroxide or rubbing alcohol directly in the wound",
+            "Don't remove large objects embedded in a wound",
+            "Don't pick at scabs - they're part of the healing process",
+            "Don't close a wound that may be dirty or infected with tape"
+        ],
+        "important_notes": [
+            "Deep cuts that gape open may need stitches - seek medical help within 6-8 hours",
+            "Animal bites always need medical attention for infection and rabies risk",
+            "Puncture wounds are prone to infection and may need professional care",
+            "Keep the wound moist with ointment for faster healing"
+        ]
+    },
+    {
+        "guide_id": "choking",
+        "title": "Choking (Heimlich Maneuver)",
+        "category": "life_threatening",
+        "icon": "alert-circle",
+        "color": "#D32F2F",
+        "severity": "critical",
+        "image_url": "https://images.unsplash.com/photo-1622115297822-a3798fdbe1f6?w=800&q=80",
+        "call_911": True,
+        "when_to_call_911": "Call 911 if the person becomes unconscious, can't cough or speak, or the object won't come out.",
+        "overview": "Choking occurs when food or an object gets stuck in the throat and blocks the airway. Quick action with abdominal thrusts can save a life.",
+        "steps": [
+            {"step_number": 1, "title": "Assess the Situation", "description": "Ask 'Are you choking?' If they can cough forcefully, encourage them to keep coughing. If they can't speak, cough, or breathe, act immediately.", "tip": "Universal choking sign: both hands clutching the throat."},
+            {"step_number": 2, "title": "Stand Behind the Person", "description": "Stand behind the choking person. Wrap your arms around their waist. Lean them slightly forward.", "tip": "For a pregnant person or very large person, place your fists higher on the chest."},
+            {"step_number": 3, "title": "Position Your Fist", "description": "Make a fist with one hand. Place it just above the belly button (navel), below the ribcage.", "tip": "Your thumb side should be against their abdomen."},
+            {"step_number": 4, "title": "Give Abdominal Thrusts", "description": "Grasp your fist with your other hand. Press hard into the abdomen with quick, upward thrusts.", "tip": "Each thrust should be a separate, distinct movement - like trying to lift them off the ground."},
+            {"step_number": 5, "title": "Repeat Until Clear", "description": "Continue giving thrusts until the object comes out, the person can breathe/cough, or they become unconscious.", "tip": "If they become unconscious, lower them to the ground and begin CPR."},
+            {"step_number": 6, "title": "If Alone (Self-Heimlich)", "description": "Make a fist above your navel. Use your other hand to push your fist in and up. Or lean over a sturdy chair back and thrust against it.", "tip": "Call 911 before attempting self-Heimlich if possible."}
+        ],
+        "do_nots": [
+            "Don't perform blind finger sweeps in the mouth",
+            "Don't slap a conscious adult on the back first (do abdominal thrusts)",
+            "Don't give abdominal thrusts to infants under 1 year (use back blows and chest thrusts instead)",
+            "Don't stop if the first thrust doesn't work - keep going"
+        ],
+        "important_notes": [
+            "For infants: Give 5 back blows between shoulder blades, then 5 chest thrusts",
+            "For children: Use same technique as adults but with gentler force",
+            "Even after successful choking relief, see a doctor to check for internal damage",
+            "Learn the Heimlich maneuver before you need it - consider taking a first aid class"
+        ]
+    },
+    {
+        "guide_id": "fractures",
+        "title": "Fractures & Broken Bones",
+        "category": "injuries",
+        "icon": "body",
+        "color": "#795548",
+        "severity": "severe",
+        "image_url": "https://images.unsplash.com/photo-1516069677018-378515003435?w=800&q=80",
+        "call_911": False,
+        "when_to_call_911": "Call 911 for suspected spine/neck/hip fractures, open fractures (bone visible), fractures with heavy bleeding, or if the person can't move.",
+        "overview": "A fracture means a broken bone. Signs include intense pain, swelling, bruising, deformity, and inability to move the area. Keep the injury still and get medical help.",
+        "steps": [
+            {"step_number": 1, "title": "Don't Move the Person", "description": "If you suspect a fracture, keep the person still. Don't try to straighten or realign the bone.", "tip": "If you must move them for safety, support the injured area and move as a unit."},
+            {"step_number": 2, "title": "Stop Any Bleeding", "description": "If there's an open wound, apply gentle pressure with a clean cloth to stop bleeding. Don't press on exposed bone.", "tip": "If bone is sticking out, cover the area with a clean, moist cloth."},
+            {"step_number": 3, "title": "Immobilize the Area", "description": "Splint the injury in the position you found it. Use padded boards, rolled newspapers, or towels to support the area.", "tip": "Include the joints above and below the fracture in your splint."},
+            {"step_number": 4, "title": "Apply Ice", "description": "Wrap ice or a cold pack in a cloth and apply to reduce swelling and pain. Apply for 15-20 minutes at a time.", "tip": "Never put ice directly on skin - always use a barrier like a towel."},
+            {"step_number": 5, "title": "Treat for Shock", "description": "Help the person lie down. Cover them with a blanket. Elevate legs if possible (unless it causes more pain).", "tip": "Signs of shock: pale skin, rapid breathing, confusion, nausea."},
+            {"step_number": 6, "title": "Get Medical Help", "description": "Take the person to the emergency room or call an ambulance. Don't let them eat or drink (they may need surgery).", "tip": "Take note of how the injury happened to tell the doctor."}
+        ],
+        "do_nots": [
+            "Don't try to push a bone back in place",
+            "Don't move the person unnecessarily, especially with suspected spine injuries",
+            "Don't give the person food or drink (they may need anesthesia)",
+            "Don't remove shoes or clothing by pulling - cut around the injury"
+        ],
+        "important_notes": [
+            "A sling works well for arm and collarbone fractures",
+            "Finger fractures: buddy-tape to the next finger with padding between",
+            "Suspected neck/spine fracture: DO NOT move - wait for emergency services",
+            "Children's bones heal faster but growth plate injuries need specialist care"
+        ]
+    },
+    {
+        "guide_id": "allergic_reaction",
+        "title": "Allergic Reactions & Anaphylaxis",
+        "category": "life_threatening",
+        "icon": "warning",
+        "color": "#FF9800",
+        "severity": "critical",
+        "image_url": "https://images.unsplash.com/photo-1745939921744-ba8ef27940bf?w=800&q=80",
+        "call_911": True,
+        "when_to_call_911": "Call 911 IMMEDIATELY for any signs of anaphylaxis: difficulty breathing, swelling of throat/tongue, dizziness, rapid pulse, or loss of consciousness.",
+        "overview": "Allergic reactions range from mild (hives, itching) to life-threatening anaphylaxis. Knowing how to use an EpiPen and when to call 911 is crucial.",
+        "steps": [
+            {"step_number": 1, "title": "Identify the Reaction", "description": "Look for: hives, itching, swelling, difficulty breathing, stomach pain, dizziness, rapid heartbeat, feeling of doom.", "tip": "Anaphylaxis can develop within seconds or up to 2 hours after exposure."},
+            {"step_number": 2, "title": "Remove the Trigger", "description": "If possible, remove the person from the allergen. If a bee sting, scrape the stinger away (don't squeeze it).", "tip": "Note what caused the reaction - this information is vital for medical staff."},
+            {"step_number": 3, "title": "Use EpiPen if Available", "description": "If the person has an EpiPen, help them use it: Remove safety cap, press firmly into outer thigh (through clothing is OK), hold for 10 seconds.", "tip": "You can use an EpiPen even if you're not sure it's anaphylaxis - it won't harm if it's not needed."},
+            {"step_number": 4, "title": "Call 911", "description": "Even if the EpiPen seems to work, call 911. Anaphylaxis can return (biphasic reaction).", "tip": "A second dose of epinephrine may be needed after 5-15 minutes if symptoms don't improve."},
+            {"step_number": 5, "title": "Position the Person", "description": "If breathing is difficult, help them sit upright. If dizzy/faint, lie them down with legs elevated. If unconscious, place in recovery position.", "tip": "Don't make them stand or walk - this can cause cardiac arrest in anaphylaxis."},
+            {"step_number": 6, "title": "Monitor Until Help Arrives", "description": "Stay with the person. Monitor breathing and consciousness. Be ready to perform CPR if they stop breathing.", "tip": "Note the time the reaction started and when EpiPen was used for medical staff."}
+        ],
+        "do_nots": [
+            "Don't wait to see if a severe reaction gets better on its own",
+            "Don't give oral medication to someone having trouble breathing/swallowing",
+            "Don't make the person stand or sit up if they feel dizzy",
+            "Don't hesitate to use the EpiPen - delays can be fatal"
+        ],
+        "important_notes": [
+            "People with known severe allergies should always carry TWO EpiPens",
+            "Antihistamines (Benadryl) can help mild reactions but are NOT a substitute for epinephrine in anaphylaxis",
+            "After anaphylaxis, the person should be monitored for at least 4 hours for a second reaction",
+            "Common anaphylaxis triggers: nuts, shellfish, bee stings, medications, latex"
+        ]
+    },
+    {
+        "guide_id": "nosebleed",
+        "title": "Nosebleed Treatment",
+        "category": "common",
+        "icon": "water",
+        "color": "#C62828",
+        "severity": "mild",
+        "image_url": "https://images.unsplash.com/photo-1534998739173-06d781b6c6ce?w=800&q=80",
+        "call_911": False,
+        "when_to_call_911": "Seek emergency help if bleeding doesn't stop after 20 minutes, follows a head injury, or the person is on blood thinners and bleeding heavily.",
+        "overview": "Most nosebleeds look scary but are harmless and can be treated at home. The key is proper positioning and consistent pressure.",
+        "steps": [
+            {"step_number": 1, "title": "Sit Up and Lean Forward", "description": "Have the person sit upright and lean slightly forward. This prevents blood from going down the throat.", "tip": "Don't tilt the head back - this can cause choking or nausea from swallowed blood."},
+            {"step_number": 2, "title": "Pinch the Nose", "description": "Using your thumb and index finger, pinch the soft part of the nose (just below the bony ridge) firmly shut.", "tip": "Breathe through the mouth while the nose is pinched."},
+            {"step_number": 3, "title": "Hold for 10-15 Minutes", "description": "Keep pinching continuously for a full 10-15 minutes. Don't check to see if it stopped before the time is up.", "tip": "Use a timer on your phone so you don't stop too early."},
+            {"step_number": 4, "title": "Apply Cold Compress", "description": "While pinching, apply a cold compress or ice pack wrapped in a cloth to the bridge of the nose.", "tip": "The cold helps constrict blood vessels and slow bleeding."},
+            {"step_number": 5, "title": "After Bleeding Stops", "description": "Once stopped, rest quietly. Avoid blowing your nose, bending over, or heavy lifting for several hours.", "tip": "Apply a thin layer of petroleum jelly (Vaseline) inside the nostrils to keep them moist."}
+        ],
+        "do_nots": [
+            "Don't tilt the head back or lie down",
+            "Don't pack the nose with tissues or cotton",
+            "Don't blow your nose for at least 12 hours after it stops",
+            "Don't pick or scratch inside the nose"
+        ],
+        "important_notes": [
+            "Dry air is the most common cause - use a humidifier at night",
+            "Frequent nosebleeds may indicate high blood pressure or a bleeding disorder",
+            "Children get nosebleeds more often - usually from nose picking or dry air",
+            "If on blood thinners, nosebleeds may take longer to stop - talk to your doctor"
+        ]
+    },
+    {
+        "guide_id": "heat_stroke",
+        "title": "Heat Stroke & Heat Exhaustion",
+        "category": "environmental",
+        "icon": "sunny",
+        "color": "#F57C00",
+        "severity": "severe",
+        "image_url": "https://images.unsplash.com/photo-1740560516658-5a94b0b715ed?w=800&q=80",
+        "call_911": True,
+        "when_to_call_911": "Call 911 IMMEDIATELY for heat stroke signs: body temp above 103°F (39.4°C), confusion, loss of consciousness, hot/dry skin (no sweating), or seizures.",
+        "overview": "Heat exhaustion is a warning sign that can progress to life-threatening heat stroke. The difference: heat exhaustion = heavy sweating; heat stroke = no sweating, very high temperature.",
+        "steps": [
+            {"step_number": 1, "title": "Move to Cool Area", "description": "Get the person out of the sun and into a cool, shaded, or air-conditioned space immediately.", "tip": "A car with AC running can work if no building is available."},
+            {"step_number": 2, "title": "Remove Excess Clothing", "description": "Take off unnecessary clothing. Loosen any tight clothing around the neck and waist.", "tip": "The goal is to help the body release heat as quickly as possible."},
+            {"step_number": 3, "title": "Cool the Body Rapidly", "description": "Apply cold, wet cloths or ice packs to neck, armpits, and groin (where blood vessels are close to the surface). Spray or sponge with cool water.", "tip": "Immersing in a cool bath is the fastest way to lower body temperature."},
+            {"step_number": 4, "title": "Hydrate (Heat Exhaustion Only)", "description": "If the person is conscious and can swallow, give cool water or sports drinks in small sips.", "tip": "Don't give fluids if the person is confused or unconscious (heat stroke) - they may choke."},
+            {"step_number": 5, "title": "Fan the Person", "description": "Fan air over the person while applying wet cloths. This increases evaporative cooling.", "tip": "Use anything available - magazines, cardboard, electric fan."},
+            {"step_number": 6, "title": "Monitor Closely", "description": "Watch for worsening symptoms. If they become confused, stop sweating, or lose consciousness, this is heat stroke - call 911.", "tip": "Continue cooling until body temperature drops below 101°F (38.3°C) or help arrives."}
+        ],
+        "do_nots": [
+            "Don't give the person alcohol or caffeine",
+            "Don't give fluids to an unconscious person",
+            "Don't use rubbing alcohol to cool the skin",
+            "Don't ignore heat exhaustion - it can quickly become heat stroke"
+        ],
+        "important_notes": [
+            "Heat exhaustion symptoms: heavy sweating, weakness, nausea, dizziness, headache, cool/moist skin",
+            "Heat stroke symptoms: high temp, no sweating, confusion, rapid pulse, hot/dry/red skin",
+            "Elderly, children, and those on certain medications are at higher risk",
+            "Prevention: Stay hydrated, avoid peak sun hours (10am-4pm), wear light clothing"
+        ]
+    },
+    {
+        "guide_id": "bites_stings",
+        "title": "Bites & Stings",
+        "category": "environmental",
+        "icon": "bug",
+        "color": "#4CAF50",
+        "severity": "moderate",
+        "image_url": "https://images.unsplash.com/photo-1741573501131-e47a35ef8647?w=800&q=80",
+        "call_911": False,
+        "when_to_call_911": "Call 911 for signs of anaphylaxis, venomous snake bites, multiple stings, or bites from unknown spiders. Also if symptoms worsen rapidly.",
+        "overview": "Most insect bites and stings are minor. The key is to clean the area, reduce swelling, and watch for allergic reactions. Snake bites need immediate medical attention.",
+        "steps": [
+            {"step_number": 1, "title": "Remove the Stinger (Bee Stings)", "description": "If a bee sting, scrape the stinger out sideways with a flat edge like a credit card. Don't squeeze or pull with tweezers.", "tip": "Squeezing the stinger can inject more venom."},
+            {"step_number": 2, "title": "Clean the Area", "description": "Wash the bite/sting with soap and water. For tick bites, use fine-tipped tweezers to pull the tick straight out.", "tip": "Save the tick or take a photo of the spider/snake if possible for identification."},
+            {"step_number": 3, "title": "Apply Cold Compress", "description": "Apply ice wrapped in a cloth for 10-15 minutes to reduce swelling and pain. Repeat as needed.", "tip": "For mosquito bites, a paste of baking soda and water can reduce itching."},
+            {"step_number": 4, "title": "Treat Pain & Itching", "description": "Apply hydrocortisone cream or calamine lotion. Take antihistamines for itching and ibuprofen for pain.", "tip": "Oral antihistamines work better than topical for widespread itching."},
+            {"step_number": 5, "title": "For Snake Bites: Stay Calm", "description": "Keep the person still and calm. Keep the bitten area below heart level. Remove jewelry/tight clothing near the bite.", "tip": "Note the snake's appearance and time of bite. Get to an ER immediately."},
+            {"step_number": 6, "title": "Watch for Reactions", "description": "Monitor for signs of allergic reaction or infection over the next 24-48 hours.", "tip": "Draw a circle around the redness with a pen to track if swelling is spreading."}
+        ],
+        "do_nots": [
+            "Don't suck venom from a snake bite",
+            "Don't apply a tourniquet for snake bites",
+            "Don't scratch insect bites (increases infection risk)",
+            "Don't apply heat to stings (ice is better)"
+        ],
+        "important_notes": [
+            "Tick bites: Watch for bull's-eye rash (sign of Lyme disease) for 30 days",
+            "Black widow/brown recluse spider bites need medical attention",
+            "All venomous snake bites are medical emergencies",
+            "Bee allergy: always carry an EpiPen if you've had severe reactions before"
+        ]
+    },
+    {
+        "guide_id": "first_aid_kit",
+        "title": "Building a First Aid Kit",
+        "category": "preparation",
+        "icon": "medkit",
+        "color": "#2196F3",
+        "severity": "info",
+        "image_url": "https://images.unsplash.com/photo-1624638760852-8ede1666ab07?w=800&q=80",
+        "call_911": False,
+        "when_to_call_911": "",
+        "overview": "A well-stocked first aid kit is essential for every home, car, and workplace. Here's what to include and how to maintain it.",
+        "steps": [
+            {"step_number": 1, "title": "Wound Care Supplies", "description": "Include: Adhesive bandages (various sizes), sterile gauze pads, adhesive tape, antibiotic ointment, antiseptic wipes, butterfly bandages.", "tip": "Get waterproof bandages - they stay on better during daily activities."},
+            {"step_number": 2, "title": "Tools & Instruments", "description": "Include: Scissors, tweezers, safety pins, disposable gloves (several pairs), CPR face shield, digital thermometer.", "tip": "Add a small flashlight with extra batteries for emergencies."},
+            {"step_number": 3, "title": "Medications", "description": "Include: Pain relievers (ibuprofen, acetaminophen), antihistamines, anti-diarrhea medicine, antacids, aspirin (for heart attack).", "tip": "Check expiration dates every 6 months and replace as needed."},
+            {"step_number": 4, "title": "Wraps & Supports", "description": "Include: Elastic bandage (ACE wrap), triangular bandage (for slings), cold packs (instant), hand sanitizer.", "tip": "An emergency blanket (space blanket) takes up almost no room and can save a life."},
+            {"step_number": 5, "title": "Emergency Information", "description": "Include: First aid manual, emergency phone numbers, list of family allergies and medications, insurance cards.", "tip": "Laminate important documents to protect from water damage."},
+            {"step_number": 6, "title": "Maintain Your Kit", "description": "Check your kit every 3-6 months. Replace used or expired items. Adjust contents based on your family's needs.", "tip": "Keep kits in your home, car, and at work. Make sure everyone knows where they are."}
+        ],
+        "do_nots": [
+            "Don't store the kit where children can easily access medications",
+            "Don't forget to check expiration dates regularly",
+            "Don't keep the kit in extreme heat or cold",
+            "Don't forget to customize for specific family needs (allergies, chronic conditions)"
+        ],
+        "important_notes": [
+            "Add personal medications (EpiPen, inhaler) for family members with known conditions",
+            "Consider a pet first aid section if you have animals",
+            "For hiking/outdoor kits: add snake bite kit, water purification, emergency whistle",
+            "Take a first aid course - supplies are only useful if you know how to use them"
+        ]
+    }
+]
+
+FIRST_AID_CATEGORIES = [
+    {"category_id": "life_threatening", "name": "Life-Threatening", "icon": "alert-circle", "color": "#E74C3C", "description": "Critical emergencies requiring immediate action"},
+    {"category_id": "injuries", "name": "Injuries", "icon": "bandage", "color": "#E91E63", "description": "Common physical injuries and wound care"},
+    {"category_id": "environmental", "name": "Environmental", "icon": "leaf", "color": "#4CAF50", "description": "Heat, cold, bites, and outdoor emergencies"},
+    {"category_id": "common", "name": "Common Issues", "icon": "medical", "color": "#2196F3", "description": "Everyday health issues and quick fixes"},
+    {"category_id": "preparation", "name": "Preparation", "icon": "medkit", "color": "#9C27B0", "description": "Be ready before emergencies happen"}
+]
+
+@api_router.get("/firstaid/categories")
+async def get_firstaid_categories(authorization: Optional[str] = Header(None), request: Request = None):
+    """Get all first aid categories"""
+    await get_current_user(authorization, request)
+    return FIRST_AID_CATEGORIES
+
+@api_router.get("/firstaid/guides")
+async def get_firstaid_guides(authorization: Optional[str] = Header(None), request: Request = None):
+    """Get all first aid guides"""
+    await get_current_user(authorization, request)
+    # Return summary without full steps for listing
+    summaries = []
+    for guide in FIRST_AID_GUIDES:
+        summaries.append({
+            "guide_id": guide["guide_id"],
+            "title": guide["title"],
+            "category": guide["category"],
+            "icon": guide["icon"],
+            "color": guide["color"],
+            "severity": guide["severity"],
+            "image_url": guide["image_url"],
+            "call_911": guide["call_911"],
+            "overview": guide["overview"],
+            "step_count": len(guide["steps"])
+        })
+    return summaries
+
+@api_router.get("/firstaid/guides/{guide_id}")
+async def get_firstaid_guide(guide_id: str, authorization: Optional[str] = Header(None), request: Request = None):
+    """Get a specific first aid guide with full details"""
+    await get_current_user(authorization, request)
+    for guide in FIRST_AID_GUIDES:
+        if guide["guide_id"] == guide_id:
+            return guide
+    raise HTTPException(status_code=404, detail="Guide not found")
+
+@api_router.post("/firstaid/search")
+async def search_firstaid(data: dict, authorization: Optional[str] = Header(None), request: Request = None):
+    """Search first aid guides"""
+    await get_current_user(authorization, request)
+    query = data.get("query", "").lower()
+    if not query:
+        return []
+    
+    results = []
+    for guide in FIRST_AID_GUIDES:
+        # Search in title, overview, steps, and important notes
+        searchable = f"{guide['title']} {guide['overview']} {guide['category']}"
+        for step in guide["steps"]:
+            searchable += f" {step['title']} {step['description']}"
+        for note in guide.get("important_notes", []):
+            searchable += f" {note}"
+        
+        if query in searchable.lower():
+            results.append({
+                "guide_id": guide["guide_id"],
+                "title": guide["title"],
+                "category": guide["category"],
+                "icon": guide["icon"],
+                "color": guide["color"],
+                "severity": guide["severity"],
+                "image_url": guide["image_url"],
+                "call_911": guide["call_911"],
+                "overview": guide["overview"],
+                "step_count": len(guide["steps"])
+            })
+    return results
+
 # Include the router in the main app
 app.include_router(api_router)
 

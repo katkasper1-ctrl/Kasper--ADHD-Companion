@@ -104,6 +104,7 @@ export default function HomeScreen() {
     { title: 'Birthdays', icon: 'gift', route: '/birthdays', color: '#E74C3C', count: null },
     { title: 'Routines', icon: 'list', route: '/routines', color: '#3498DB', count: null },
     { title: 'Groceries', icon: 'cart', route: '/grocery', color: '#27AE60', count: null },
+    { title: 'First Aid', icon: 'medkit', route: '/firstaid', color: '#E74C3C', count: null },
   ];
 
   return (

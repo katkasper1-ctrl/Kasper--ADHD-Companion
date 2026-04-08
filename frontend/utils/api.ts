@@ -184,4 +184,10 @@ export const api = {
   deleteDietEntry: (id: string) => apiRequest(`/diet/logs/${id}`, { method: 'DELETE' }),
   getDietInsights: () => apiRequest('/diet/insights'),
   analyzeFood: (food: string) => apiRequest('/diet/analyze', { method: 'POST', body: JSON.stringify({ food_description: food }) }),
+
+  // First Aid
+  getFirstAidCategories: () => apiRequest('/firstaid/categories'),
+  getFirstAidGuides: () => apiRequest('/firstaid/guides'),
+  getFirstAidGuide: (guideId: string) => apiRequest(`/firstaid/guides/${guideId}`),
+  searchFirstAid: (query: string) => apiRequest('/firstaid/search', { method: 'POST', body: JSON.stringify({ query }) }),
 };

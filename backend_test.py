@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-AI Therapy Buddy Backend Testing Script
-Tests all therapy endpoints in the specified order
+Diet Tracker & First Aid Guide Backend Testing Script
+Tests all endpoints for both new features
 """
 
 import requests
@@ -14,11 +14,12 @@ BACKEND_URL = "https://adhd-companion-18.preview.emergentagent.com/api"
 TEST_EMAIL = "test@example.com"
 TEST_PASSWORD = "password123"
 
-class TherapyBuddyTester:
+class DietAndFirstAidTester:
     def __init__(self):
         self.session = requests.Session()
         self.auth_token = None
         self.test_results = []
+        self.diet_entry_ids = []  # Store entry IDs for deletion test
         
     def log_test(self, test_name, success, details=""):
         """Log test result"""
@@ -61,298 +62,494 @@ class TherapyBuddyTester:
         except Exception as e:
             self.log_test("Authentication", False, f"Authentication error: {str(e)}")
             return False
+
+    # ============= DIET TRACKER TESTS =============
     
-    def test_get_buddies(self):
-        """Test 1: GET /api/therapy/buddies - Should return 10 animal buddies"""
-        print("🐾 Testing GET /api/therapy/buddies...")
+    def test_diet_log_1(self):
+        """Test 1: POST /api/diet/log - Log Grilled Chicken Salad"""
+        print("🥗 Testing POST /api/diet/log (Grilled Chicken Salad)...")
         try:
-            response = self.session.get(f"{BACKEND_URL}/therapy/buddies")
-            
-            if response.status_code == 200:
-                buddies = response.json()
-                if isinstance(buddies, list) and len(buddies) == 10:
-                    # Check structure of first buddy
-                    first_buddy = buddies[0]
-                    required_fields = ["buddy_id", "name", "animal", "emoji"]
-                    if all(field in first_buddy for field in required_fields):
-                        buddy_names = [b["name"] for b in buddies]
-                        self.log_test("GET /api/therapy/buddies", True, 
-                                    f"Retrieved 10 buddies: {', '.join(buddy_names[:5])}...")
-                        return True
-                    else:
-                        self.log_test("GET /api/therapy/buddies", False, 
-                                    f"Missing required fields. Got: {list(first_buddy.keys())}")
-                        return False
-                else:
-                    self.log_test("GET /api/therapy/buddies", False, 
-                                f"Expected 10 buddies, got {len(buddies) if isinstance(buddies, list) else 'non-list'}")
-                    return False
-            else:
-                self.log_test("GET /api/therapy/buddies", False, 
-                            f"HTTP {response.status_code}: {response.text}")
-                return False
-                
-        except Exception as e:
-            self.log_test("GET /api/therapy/buddies", False, f"Error: {str(e)}")
-            return False
-    
-    def test_get_buddy_initial(self):
-        """Test 2: GET /api/therapy/buddy - Should return {"buddy_id": null} initially"""
-        print("🔍 Testing GET /api/therapy/buddy (initial state)...")
-        try:
-            response = self.session.get(f"{BACKEND_URL}/therapy/buddy")
-            
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("buddy_id") is None:
-                    self.log_test("GET /api/therapy/buddy (initial)", True, 
-                                "Correctly returned null buddy_id for new user")
-                    return True
-                else:
-                    self.log_test("GET /api/therapy/buddy (initial)", False, 
-                                f"Expected buddy_id: null, got: {data.get('buddy_id')}")
-                    return False
-            else:
-                self.log_test("GET /api/therapy/buddy (initial)", False, 
-                            f"HTTP {response.status_code}: {response.text}")
-                return False
-                
-        except Exception as e:
-            self.log_test("GET /api/therapy/buddy (initial)", False, f"Error: {str(e)}")
-            return False
-    
-    def test_select_buddy(self):
-        """Test 3: PUT /api/therapy/buddy - Select Luna the Cat"""
-        print("🐱 Testing PUT /api/therapy/buddy...")
-        try:
-            buddy_data = {"buddy_id": "luna_cat"}
-            response = self.session.put(f"{BACKEND_URL}/therapy/buddy", json=buddy_data)
-            
-            if response.status_code == 200:
-                data = response.json()
-                if (data.get("buddy_id") == "luna_cat" and 
-                    data.get("buddy_name") == "Luna" and 
-                    data.get("buddy_animal") == "Cat"):
-                    self.log_test("PUT /api/therapy/buddy", True, 
-                                f"Successfully selected Luna the Cat 🐱")
-                    return True
-                else:
-                    self.log_test("PUT /api/therapy/buddy", False, 
-                                f"Unexpected response data: {data}")
-                    return False
-            else:
-                self.log_test("PUT /api/therapy/buddy", False, 
-                            f"HTTP {response.status_code}: {response.text}")
-                return False
-                
-        except Exception as e:
-            self.log_test("PUT /api/therapy/buddy", False, f"Error: {str(e)}")
-            return False
-    
-    def test_therapy_chat(self):
-        """Test 4: POST /api/therapy/chat - Send message to AI buddy"""
-        print("💬 Testing POST /api/therapy/chat...")
-        try:
-            message_data = {"message": "Hi! I had a really stressful day at work today"}
-            response = self.session.post(f"{BACKEND_URL}/therapy/chat", json=message_data)
-            
-            if response.status_code == 200:
-                data = response.json()
-                if "response" in data and data["response"]:
-                    ai_response = data["response"]
-                    self.log_test("POST /api/therapy/chat", True, 
-                                f"AI responded: '{ai_response[:100]}{'...' if len(ai_response) > 100 else ''}'")
-                    return True
-                else:
-                    self.log_test("POST /api/therapy/chat", False, 
-                                f"No AI response in data: {data}")
-                    return False
-            else:
-                self.log_test("POST /api/therapy/chat", False, 
-                            f"HTTP {response.status_code}: {response.text}")
-                return False
-                
-        except Exception as e:
-            self.log_test("POST /api/therapy/chat", False, f"Error: {str(e)}")
-            return False
-    
-    def test_get_history(self):
-        """Test 5: GET /api/therapy/history - Should show user message and AI response"""
-        print("📜 Testing GET /api/therapy/history...")
-        try:
-            response = self.session.get(f"{BACKEND_URL}/therapy/history")
-            
-            if response.status_code == 200:
-                history = response.json()
-                if isinstance(history, list) and len(history) >= 2:
-                    # Should have at least user message and AI response
-                    user_msg = next((msg for msg in history if msg.get("role") == "user"), None)
-                    ai_msg = next((msg for msg in history if msg.get("role") == "assistant"), None)
-                    
-                    if user_msg and ai_msg:
-                        self.log_test("GET /api/therapy/history", True, 
-                                    f"Found {len(history)} messages including user and AI responses")
-                        return True
-                    else:
-                        self.log_test("GET /api/therapy/history", False, 
-                                    f"Missing user or AI messages in history: {[msg.get('role') for msg in history]}")
-                        return False
-                else:
-                    self.log_test("GET /api/therapy/history", False, 
-                                f"Expected at least 2 messages, got {len(history) if isinstance(history, list) else 'non-list'}")
-                    return False
-            else:
-                self.log_test("GET /api/therapy/history", False, 
-                            f"HTTP {response.status_code}: {response.text}")
-                return False
-                
-        except Exception as e:
-            self.log_test("GET /api/therapy/history", False, f"Error: {str(e)}")
-            return False
-    
-    def test_mood_checkin_1(self):
-        """Test 6: POST /api/therapy/mood - Log first mood check-in"""
-        print("😐 Testing POST /api/therapy/mood (first check-in)...")
-        try:
-            mood_data = {
-                "mood_score": 3,
-                "mood_label": "neutral",
-                "notes": "feeling ok today"
+            diet_data = {
+                "food_name": "Grilled Chicken Salad",
+                "meal_type": "lunch",
+                "food_category": "nutritious",
+                "calories": 350,
+                "protein_g": 30,
+                "carbs_g": 15,
+                "fat_g": 12,
+                "mood_before": "tired",
+                "mood_after": "energized"
             }
-            response = self.session.post(f"{BACKEND_URL}/therapy/mood", json=mood_data)
+            response = self.session.post(f"{BACKEND_URL}/diet/log", json=diet_data)
             
             if response.status_code == 200:
                 data = response.json()
-                if (data.get("mood_score") == 3 and 
-                    data.get("mood_label") == "neutral" and 
-                    data.get("notes") == "feeling ok today"):
-                    self.log_test("POST /api/therapy/mood (first)", True, 
-                                f"Logged mood: {data['mood_label']} (score: {data['mood_score']})")
-                    return True
-                else:
-                    self.log_test("POST /api/therapy/mood (first)", False, 
-                                f"Unexpected mood data: {data}")
-                    return False
-            else:
-                self.log_test("POST /api/therapy/mood (first)", False, 
-                            f"HTTP {response.status_code}: {response.text}")
-                return False
-                
-        except Exception as e:
-            self.log_test("POST /api/therapy/mood (first)", False, f"Error: {str(e)}")
-            return False
-    
-    def test_mood_checkin_2(self):
-        """Test 7: POST /api/therapy/mood - Log second mood check-in"""
-        print("😊 Testing POST /api/therapy/mood (second check-in)...")
-        try:
-            mood_data = {
-                "mood_score": 4,
-                "mood_label": "good",
-                "notes": "talked to my buddy and feel better"
-            }
-            response = self.session.post(f"{BACKEND_URL}/therapy/mood", json=mood_data)
-            
-            if response.status_code == 200:
-                data = response.json()
-                if (data.get("mood_score") == 4 and 
-                    data.get("mood_label") == "good" and 
-                    data.get("notes") == "talked to my buddy and feel better"):
-                    self.log_test("POST /api/therapy/mood (second)", True, 
-                                f"Logged mood: {data['mood_label']} (score: {data['mood_score']})")
-                    return True
-                else:
-                    self.log_test("POST /api/therapy/mood (second)", False, 
-                                f"Unexpected mood data: {data}")
-                    return False
-            else:
-                self.log_test("POST /api/therapy/mood (second)", False, 
-                            f"HTTP {response.status_code}: {response.text}")
-                return False
-                
-        except Exception as e:
-            self.log_test("POST /api/therapy/mood (second)", False, f"Error: {str(e)}")
-            return False
-    
-    def test_get_progress(self):
-        """Test 8: GET /api/therapy/progress - Should show checkins, average mood, trend"""
-        print("📊 Testing GET /api/therapy/progress...")
-        try:
-            response = self.session.get(f"{BACKEND_URL}/therapy/progress")
-            
-            if response.status_code == 200:
-                data = response.json()
-                required_fields = ["checkins", "average_mood", "total_sessions", "total_checkins", "trend"]
-                
+                required_fields = ["entry_id", "user_id", "food_name", "meal_type", "food_category", "calories"]
                 if all(field in data for field in required_fields):
-                    checkins = data["checkins"]
-                    avg_mood = data["average_mood"]
-                    total_checkins = data["total_checkins"]
-                    trend = data["trend"]
-                    
-                    if total_checkins >= 2 and isinstance(checkins, list):
-                        self.log_test("GET /api/therapy/progress", True, 
-                                    f"Progress: {total_checkins} check-ins, avg mood: {avg_mood}, trend: {trend}")
-                        return True
-                    else:
-                        self.log_test("GET /api/therapy/progress", False, 
-                                    f"Expected at least 2 check-ins, got {total_checkins}")
-                        return False
+                    # Store entry ID for later deletion test
+                    self.diet_entry_ids.append(data["entry_id"])
+                    self.log_test("POST /api/diet/log (Grilled Chicken Salad)", True, 
+                                f"Logged: {data['food_name']} - {data['calories']} cal, {data['protein_g']}g protein")
+                    return True
                 else:
-                    self.log_test("GET /api/therapy/progress", False, 
+                    self.log_test("POST /api/diet/log (Grilled Chicken Salad)", False, 
                                 f"Missing required fields. Got: {list(data.keys())}")
                     return False
             else:
-                self.log_test("GET /api/therapy/progress", False, 
+                self.log_test("POST /api/diet/log (Grilled Chicken Salad)", False, 
                             f"HTTP {response.status_code}: {response.text}")
                 return False
                 
         except Exception as e:
-            self.log_test("GET /api/therapy/progress", False, f"Error: {str(e)}")
+            self.log_test("POST /api/diet/log (Grilled Chicken Salad)", False, f"Error: {str(e)}")
             return False
     
-    def test_clear_history(self):
-        """Test 9: DELETE /api/therapy/history - Clear chat history"""
-        print("🗑️ Testing DELETE /api/therapy/history...")
+    def test_diet_log_2(self):
+        """Test 2: POST /api/diet/log - Log Pizza"""
+        print("🍕 Testing POST /api/diet/log (Pizza)...")
         try:
-            response = self.session.delete(f"{BACKEND_URL}/therapy/history")
+            diet_data = {
+                "food_name": "Pizza",
+                "meal_type": "dinner",
+                "food_category": "comfort",
+                "calories": 800,
+                "protein_g": 20,
+                "carbs_g": 80,
+                "fat_g": 35,
+                "mood_before": "anxious",
+                "mood_after": "happy"
+            }
+            response = self.session.post(f"{BACKEND_URL}/diet/log", json=diet_data)
             
             if response.status_code == 200:
                 data = response.json()
-                if "message" in data and "Cleared" in data["message"]:
-                    # Verify history is actually cleared
-                    verify_response = self.session.get(f"{BACKEND_URL}/therapy/history")
-                    if verify_response.status_code == 200:
-                        history = verify_response.json()
-                        if isinstance(history, list) and len(history) == 0:
-                            self.log_test("DELETE /api/therapy/history", True, 
-                                        f"Successfully cleared chat history: {data['message']}")
-                            return True
-                        else:
-                            self.log_test("DELETE /api/therapy/history", False, 
-                                        f"History not cleared, still has {len(history)} messages")
-                            return False
-                    else:
-                        self.log_test("DELETE /api/therapy/history", False, 
-                                    f"Could not verify history clearing: {verify_response.status_code}")
-                        return False
+                if (data.get("food_name") == "Pizza" and 
+                    data.get("calories") == 800 and 
+                    data.get("food_category") == "comfort"):
+                    # Store entry ID for later deletion test
+                    self.diet_entry_ids.append(data["entry_id"])
+                    self.log_test("POST /api/diet/log (Pizza)", True, 
+                                f"Logged: {data['food_name']} - {data['calories']} cal, mood: {data['mood_before']} → {data['mood_after']}")
+                    return True
                 else:
-                    self.log_test("DELETE /api/therapy/history", False, 
-                                f"Unexpected response: {data}")
+                    self.log_test("POST /api/diet/log (Pizza)", False, 
+                                f"Unexpected data: {data}")
                     return False
             else:
-                self.log_test("DELETE /api/therapy/history", False, 
+                self.log_test("POST /api/diet/log (Pizza)", False, 
                             f"HTTP {response.status_code}: {response.text}")
                 return False
                 
         except Exception as e:
-            self.log_test("DELETE /api/therapy/history", False, f"Error: {str(e)}")
+            self.log_test("POST /api/diet/log (Pizza)", False, f"Error: {str(e)}")
+            return False
+    
+    def test_diet_today(self):
+        """Test 3: GET /api/diet/today - Get today's diet summary"""
+        print("📊 Testing GET /api/diet/today...")
+        try:
+            response = self.session.get(f"{BACKEND_URL}/diet/today")
+            
+            if response.status_code == 200:
+                data = response.json()
+                required_fields = ["date", "logs", "summary"]
+                if all(field in data for field in required_fields):
+                    logs = data["logs"]
+                    summary = data["summary"]
+                    
+                    # Should have at least 2 logs from previous tests
+                    if len(logs) >= 2 and "total_calories" in summary:
+                        total_cal = summary["total_calories"]
+                        meal_count = summary["meal_count"]
+                        self.log_test("GET /api/diet/today", True, 
+                                    f"Today's summary: {meal_count} meals, {total_cal} total calories")
+                        return True
+                    else:
+                        self.log_test("GET /api/diet/today", False, 
+                                    f"Expected at least 2 logs, got {len(logs)}. Summary: {summary}")
+                        return False
+                else:
+                    self.log_test("GET /api/diet/today", False, 
+                                f"Missing required fields. Got: {list(data.keys())}")
+                    return False
+            else:
+                self.log_test("GET /api/diet/today", False, 
+                            f"HTTP {response.status_code}: {response.text}")
+                return False
+                
+        except Exception as e:
+            self.log_test("GET /api/diet/today", False, f"Error: {str(e)}")
+            return False
+    
+    def test_diet_logs(self):
+        """Test 4: GET /api/diet/logs - Get all diet logs"""
+        print("📋 Testing GET /api/diet/logs...")
+        try:
+            response = self.session.get(f"{BACKEND_URL}/diet/logs")
+            
+            if response.status_code == 200:
+                logs = response.json()
+                if isinstance(logs, list) and len(logs) >= 2:
+                    # Check that our test entries are in the logs
+                    food_names = [log.get("food_name") for log in logs]
+                    if "Grilled Chicken Salad" in food_names and "Pizza" in food_names:
+                        self.log_test("GET /api/diet/logs", True, 
+                                    f"Retrieved {len(logs)} diet logs including our test entries")
+                        return True
+                    else:
+                        self.log_test("GET /api/diet/logs", False, 
+                                    f"Test entries not found in logs. Food names: {food_names}")
+                        return False
+                else:
+                    self.log_test("GET /api/diet/logs", False, 
+                                f"Expected at least 2 logs, got {len(logs) if isinstance(logs, list) else 'non-list'}")
+                    return False
+            else:
+                self.log_test("GET /api/diet/logs", False, 
+                            f"HTTP {response.status_code}: {response.text}")
+                return False
+                
+        except Exception as e:
+            self.log_test("GET /api/diet/logs", False, f"Error: {str(e)}")
+            return False
+    
+    def test_diet_insights(self):
+        """Test 5: GET /api/diet/insights - Get diet insights"""
+        print("💡 Testing GET /api/diet/insights...")
+        try:
+            response = self.session.get(f"{BACKEND_URL}/diet/insights")
+            
+            if response.status_code == 200:
+                data = response.json()
+                required_fields = ["total_entries", "comfort_ratio", "nutritious_ratio", "avg_daily_calories", "insights"]
+                if all(field in data for field in required_fields):
+                    total_entries = data["total_entries"]
+                    comfort_ratio = data["comfort_ratio"]
+                    nutritious_ratio = data["nutritious_ratio"]
+                    insights = data["insights"]
+                    
+                    if total_entries >= 2:
+                        self.log_test("GET /api/diet/insights", True, 
+                                    f"Insights: {total_entries} entries, {comfort_ratio}% comfort, {nutritious_ratio}% nutritious, {len(insights)} insights")
+                        return True
+                    else:
+                        self.log_test("GET /api/diet/insights", False, 
+                                    f"Expected at least 2 entries, got {total_entries}")
+                        return False
+                else:
+                    self.log_test("GET /api/diet/insights", False, 
+                                f"Missing required fields. Got: {list(data.keys())}")
+                    return False
+            else:
+                self.log_test("GET /api/diet/insights", False, 
+                            f"HTTP {response.status_code}: {response.text}")
+                return False
+                
+        except Exception as e:
+            self.log_test("GET /api/diet/insights", False, f"Error: {str(e)}")
+            return False
+    
+    def test_diet_analyze(self):
+        """Test 6: POST /api/diet/analyze - AI food analysis"""
+        print("🤖 Testing POST /api/diet/analyze (AI GPT-5.2)...")
+        try:
+            analyze_data = {
+                "food_description": "a large pepperoni pizza slice"
+            }
+            response = self.session.post(f"{BACKEND_URL}/diet/analyze", json=analyze_data)
+            
+            if response.status_code == 200:
+                data = response.json()
+                required_fields = ["food_name", "calories", "food_category", "impact_mind", "impact_body", "impact_mood"]
+                if all(field in data for field in required_fields):
+                    food_name = data["food_name"]
+                    calories = data["calories"]
+                    category = data["food_category"]
+                    impact_mind = data["impact_mind"]
+                    
+                    self.log_test("POST /api/diet/analyze", True, 
+                                f"AI analyzed: {food_name} - {calories} cal, category: {category}, mind impact: {impact_mind[:50]}...")
+                    return True
+                else:
+                    self.log_test("POST /api/diet/analyze", False, 
+                                f"Missing required fields. Got: {list(data.keys())}")
+                    return False
+            else:
+                self.log_test("POST /api/diet/analyze", False, 
+                            f"HTTP {response.status_code}: {response.text}")
+                return False
+                
+        except Exception as e:
+            self.log_test("POST /api/diet/analyze", False, f"Error: {str(e)}")
+            return False
+    
+    def test_diet_delete(self):
+        """Test 7: DELETE /api/diet/logs/{entry_id} - Delete a diet entry"""
+        print("🗑️ Testing DELETE /api/diet/logs/{entry_id}...")
+        try:
+            if not self.diet_entry_ids:
+                self.log_test("DELETE /api/diet/logs/{entry_id}", False, "No entry IDs available for deletion test")
+                return False
+            
+            entry_id = self.diet_entry_ids[0]  # Delete the first entry
+            response = self.session.delete(f"{BACKEND_URL}/diet/logs/{entry_id}")
+            
+            if response.status_code == 200:
+                data = response.json()
+                if "message" in data and "deleted" in data["message"].lower():
+                    # Verify deletion by trying to get all logs and checking count
+                    verify_response = self.session.get(f"{BACKEND_URL}/diet/logs")
+                    if verify_response.status_code == 200:
+                        logs = verify_response.json()
+                        deleted_entry_found = any(log.get("entry_id") == entry_id for log in logs)
+                        if not deleted_entry_found:
+                            self.log_test("DELETE /api/diet/logs/{entry_id}", True, 
+                                        f"Successfully deleted entry {entry_id}")
+                            return True
+                        else:
+                            self.log_test("DELETE /api/diet/logs/{entry_id}", False, 
+                                        f"Entry {entry_id} still found in logs after deletion")
+                            return False
+                    else:
+                        self.log_test("DELETE /api/diet/logs/{entry_id}", False, 
+                                    f"Could not verify deletion: {verify_response.status_code}")
+                        return False
+                else:
+                    self.log_test("DELETE /api/diet/logs/{entry_id}", False, 
+                                f"Unexpected response: {data}")
+                    return False
+            else:
+                self.log_test("DELETE /api/diet/logs/{entry_id}", False, 
+                            f"HTTP {response.status_code}: {response.text}")
+                return False
+                
+        except Exception as e:
+            self.log_test("DELETE /api/diet/logs/{entry_id}", False, f"Error: {str(e)}")
+            return False
+
+    # ============= FIRST AID GUIDE TESTS =============
+    
+    def test_firstaid_categories(self):
+        """Test 8: GET /api/firstaid/categories - Should return 5 categories"""
+        print("🏥 Testing GET /api/firstaid/categories...")
+        try:
+            response = self.session.get(f"{BACKEND_URL}/firstaid/categories")
+            
+            if response.status_code == 200:
+                categories = response.json()
+                if isinstance(categories, list) and len(categories) == 5:
+                    # Check structure of first category
+                    first_cat = categories[0]
+                    required_fields = ["category_id", "name", "icon", "color", "description"]
+                    if all(field in first_cat for field in required_fields):
+                        cat_names = [c["name"] for c in categories]
+                        self.log_test("GET /api/firstaid/categories", True, 
+                                    f"Retrieved 5 categories: {', '.join(cat_names)}")
+                        return True
+                    else:
+                        self.log_test("GET /api/firstaid/categories", False, 
+                                    f"Missing required fields. Got: {list(first_cat.keys())}")
+                        return False
+                else:
+                    self.log_test("GET /api/firstaid/categories", False, 
+                                f"Expected 5 categories, got {len(categories) if isinstance(categories, list) else 'non-list'}")
+                    return False
+            else:
+                self.log_test("GET /api/firstaid/categories", False, 
+                            f"HTTP {response.status_code}: {response.text}")
+                return False
+                
+        except Exception as e:
+            self.log_test("GET /api/firstaid/categories", False, f"Error: {str(e)}")
+            return False
+    
+    def test_firstaid_guides(self):
+        """Test 9: GET /api/firstaid/guides - Should return 10 guide summaries"""
+        print("📚 Testing GET /api/firstaid/guides...")
+        try:
+            response = self.session.get(f"{BACKEND_URL}/firstaid/guides")
+            
+            if response.status_code == 200:
+                guides = response.json()
+                if isinstance(guides, list) and len(guides) == 10:
+                    # Check structure of first guide
+                    first_guide = guides[0]
+                    required_fields = ["guide_id", "title", "severity", "image_url", "overview", "step_count"]
+                    if all(field in first_guide for field in required_fields):
+                        guide_titles = [g["title"] for g in guides]
+                        self.log_test("GET /api/firstaid/guides", True, 
+                                    f"Retrieved 10 guides: {', '.join(guide_titles[:3])}...")
+                        return True
+                    else:
+                        self.log_test("GET /api/firstaid/guides", False, 
+                                    f"Missing required fields. Got: {list(first_guide.keys())}")
+                        return False
+                else:
+                    self.log_test("GET /api/firstaid/guides", False, 
+                                f"Expected 10 guides, got {len(guides) if isinstance(guides, list) else 'non-list'}")
+                    return False
+            else:
+                self.log_test("GET /api/firstaid/guides", False, 
+                            f"HTTP {response.status_code}: {response.text}")
+                return False
+                
+        except Exception as e:
+            self.log_test("GET /api/firstaid/guides", False, f"Error: {str(e)}")
+            return False
+    
+    def test_firstaid_guide_cpr(self):
+        """Test 10: GET /api/firstaid/guides/cpr - Full CPR guide with steps"""
+        print("❤️ Testing GET /api/firstaid/guides/cpr...")
+        try:
+            response = self.session.get(f"{BACKEND_URL}/firstaid/guides/cpr")
+            
+            if response.status_code == 200:
+                guide = response.json()
+                required_fields = ["guide_id", "title", "steps", "do_nots", "important_notes"]
+                if all(field in guide for field in required_fields):
+                    if (guide.get("guide_id") == "cpr" and 
+                        guide.get("title") == "CPR (Cardiopulmonary Resuscitation)" and
+                        isinstance(guide.get("steps"), list) and len(guide["steps"]) > 0):
+                        
+                        steps_count = len(guide["steps"])
+                        do_nots_count = len(guide.get("do_nots", []))
+                        notes_count = len(guide.get("important_notes", []))
+                        
+                        self.log_test("GET /api/firstaid/guides/cpr", True, 
+                                    f"CPR guide: {steps_count} steps, {do_nots_count} do-nots, {notes_count} important notes")
+                        return True
+                    else:
+                        self.log_test("GET /api/firstaid/guides/cpr", False, 
+                                    f"Unexpected guide data: {guide.get('guide_id')}, {guide.get('title')}")
+                        return False
+                else:
+                    self.log_test("GET /api/firstaid/guides/cpr", False, 
+                                f"Missing required fields. Got: {list(guide.keys())}")
+                    return False
+            else:
+                self.log_test("GET /api/firstaid/guides/cpr", False, 
+                            f"HTTP {response.status_code}: {response.text}")
+                return False
+                
+        except Exception as e:
+            self.log_test("GET /api/firstaid/guides/cpr", False, f"Error: {str(e)}")
+            return False
+    
+    def test_firstaid_guide_burns(self):
+        """Test 11: GET /api/firstaid/guides/burns - Full Burns guide with steps"""
+        print("🔥 Testing GET /api/firstaid/guides/burns...")
+        try:
+            response = self.session.get(f"{BACKEND_URL}/firstaid/guides/burns")
+            
+            if response.status_code == 200:
+                guide = response.json()
+                if (guide.get("guide_id") == "burns" and 
+                    guide.get("title") == "Burns Treatment" and
+                    isinstance(guide.get("steps"), list) and len(guide["steps"]) > 0):
+                    
+                    steps_count = len(guide["steps"])
+                    severity = guide.get("severity")
+                    
+                    self.log_test("GET /api/firstaid/guides/burns", True, 
+                                f"Burns guide: {steps_count} steps, severity: {severity}")
+                    return True
+                else:
+                    self.log_test("GET /api/firstaid/guides/burns", False, 
+                                f"Unexpected guide data: {guide.get('guide_id')}, {guide.get('title')}")
+                    return False
+            else:
+                self.log_test("GET /api/firstaid/guides/burns", False, 
+                            f"HTTP {response.status_code}: {response.text}")
+                return False
+                
+        except Exception as e:
+            self.log_test("GET /api/firstaid/guides/burns", False, f"Error: {str(e)}")
+            return False
+    
+    def test_firstaid_search_bleeding(self):
+        """Test 12: POST /api/firstaid/search - Search for 'bleeding'"""
+        print("🔍 Testing POST /api/firstaid/search (bleeding)...")
+        try:
+            search_data = {"query": "bleeding"}
+            response = self.session.post(f"{BACKEND_URL}/firstaid/search", json=search_data)
+            
+            if response.status_code == 200:
+                results = response.json()
+                if isinstance(results, list) and len(results) > 0:
+                    # Should find guides related to bleeding (cuts, wounds, etc.)
+                    found_relevant = False
+                    for result in results:
+                        title = result.get("title", "").lower()
+                        if "cut" in title or "wound" in title or "bleeding" in title:
+                            found_relevant = True
+                            break
+                    
+                    if found_relevant:
+                        result_titles = [r.get("title") for r in results]
+                        self.log_test("POST /api/firstaid/search (bleeding)", True, 
+                                    f"Found {len(results)} relevant guides: {', '.join(result_titles)}")
+                        return True
+                    else:
+                        self.log_test("POST /api/firstaid/search (bleeding)", False, 
+                                    f"No relevant guides found for 'bleeding'. Results: {[r.get('title') for r in results]}")
+                        return False
+                else:
+                    self.log_test("POST /api/firstaid/search (bleeding)", False, 
+                                f"Expected search results, got {len(results) if isinstance(results, list) else 'non-list'}")
+                    return False
+            else:
+                self.log_test("POST /api/firstaid/search (bleeding)", False, 
+                            f"HTTP {response.status_code}: {response.text}")
+                return False
+                
+        except Exception as e:
+            self.log_test("POST /api/firstaid/search (bleeding)", False, f"Error: {str(e)}")
+            return False
+    
+    def test_firstaid_search_choking(self):
+        """Test 13: POST /api/firstaid/search - Search for 'choking'"""
+        print("🫁 Testing POST /api/firstaid/search (choking)...")
+        try:
+            search_data = {"query": "choking"}
+            response = self.session.post(f"{BACKEND_URL}/firstaid/search", json=search_data)
+            
+            if response.status_code == 200:
+                results = response.json()
+                if isinstance(results, list) and len(results) > 0:
+                    # Should find the choking guide
+                    choking_guide_found = False
+                    for result in results:
+                        title = result.get("title", "").lower()
+                        guide_id = result.get("guide_id", "")
+                        if "choking" in title or guide_id == "choking":
+                            choking_guide_found = True
+                            break
+                    
+                    if choking_guide_found:
+                        self.log_test("POST /api/firstaid/search (choking)", True, 
+                                    f"Found choking guide in {len(results)} results")
+                        return True
+                    else:
+                        self.log_test("POST /api/firstaid/search (choking)", False, 
+                                    f"Choking guide not found. Results: {[r.get('title') for r in results]}")
+                        return False
+                else:
+                    self.log_test("POST /api/firstaid/search (choking)", False, 
+                                f"Expected search results, got {len(results) if isinstance(results, list) else 'non-list'}")
+                    return False
+            else:
+                self.log_test("POST /api/firstaid/search (choking)", False, 
+                            f"HTTP {response.status_code}: {response.text}")
+                return False
+                
+        except Exception as e:
+            self.log_test("POST /api/firstaid/search (choking)", False, f"Error: {str(e)}")
             return False
     
     def run_all_tests(self):
-        """Run all therapy buddy tests in order"""
-        print("🚀 Starting AI Therapy Buddy Testing...")
-        print("=" * 60)
+        """Run all diet tracker and first aid guide tests"""
+        print("🚀 Starting Diet Tracker & First Aid Guide Testing...")
+        print("=" * 70)
         
         # Authenticate first
         if not self.authenticate():
@@ -361,15 +558,22 @@ class TherapyBuddyTester:
         
         # Run tests in order
         tests = [
-            self.test_get_buddies,
-            self.test_get_buddy_initial,
-            self.test_select_buddy,
-            self.test_therapy_chat,
-            self.test_get_history,
-            self.test_mood_checkin_1,
-            self.test_mood_checkin_2,
-            self.test_get_progress,
-            self.test_clear_history
+            # Diet Tracker Tests (7 endpoints)
+            self.test_diet_log_1,
+            self.test_diet_log_2,
+            self.test_diet_today,
+            self.test_diet_logs,
+            self.test_diet_insights,
+            self.test_diet_analyze,
+            self.test_diet_delete,
+            
+            # First Aid Guide Tests (6 endpoints)
+            self.test_firstaid_categories,
+            self.test_firstaid_guides,
+            self.test_firstaid_guide_cpr,
+            self.test_firstaid_guide_burns,
+            self.test_firstaid_search_bleeding,
+            self.test_firstaid_search_choking
         ]
         
         passed = 0
@@ -380,11 +584,21 @@ class TherapyBuddyTester:
                 passed += 1
         
         # Summary
-        print("=" * 60)
+        print("=" * 70)
         print(f"🏁 TESTING COMPLETE: {passed}/{total} tests passed")
         
+        # Detailed breakdown
+        diet_tests = [r for r in self.test_results if "diet" in r["test"].lower()]
+        firstaid_tests = [r for r in self.test_results if "firstaid" in r["test"].lower()]
+        
+        diet_passed = sum(1 for t in diet_tests if t["success"])
+        firstaid_passed = sum(1 for t in firstaid_tests if t["success"])
+        
+        print(f"📊 Diet Tracker: {diet_passed}/7 tests passed")
+        print(f"🏥 First Aid Guide: {firstaid_passed}/6 tests passed")
+        
         if passed == total:
-            print("✅ ALL TESTS PASSED! AI Therapy Buddy feature is fully functional.")
+            print("✅ ALL TESTS PASSED! Both Diet Tracker and First Aid Guide features are fully functional.")
             return True
         else:
             print(f"❌ {total - passed} tests failed. See details above.")
@@ -392,7 +606,7 @@ class TherapyBuddyTester:
 
 def main():
     """Main function"""
-    tester = TherapyBuddyTester()
+    tester = DietAndFirstAidTester()
     success = tester.run_all_tests()
     sys.exit(0 if success else 1)
 
