@@ -333,6 +333,38 @@ class ChoreCreate(BaseModel):
     days: Optional[List[str]] = []
     room: Optional[str] = ""
 
+class Sleep(BaseModel):
+    sleep_id: str
+    user_id: str
+    bedtime: datetime
+    wake_time: datetime
+    duration_hours: float
+    quality: int  # 1-5 rating
+    notes: Optional[str] = ""
+    felt_rested: bool = False
+    date: str  # YYYY-MM-DD
+    created_at: datetime
+
+class SleepCreate(BaseModel):
+    bedtime: datetime
+    wake_time: datetime
+    quality: int
+    notes: Optional[str] = ""
+    felt_rested: Optional[bool] = False
+
+class SleepGoal(BaseModel):
+    sleep_goal_id: str
+    user_id: str
+    target_bedtime: str  # "22:00"
+    target_wake_time: str  # "06:00"
+    target_hours: float
+    created_at: datetime
+
+class SleepGoalCreate(BaseModel):
+    target_bedtime: str
+    target_wake_time: str
+    target_hours: float
+
 # ============= HELPERS =============
 
 def hash_password(password: str) -> str:
@@ -1695,6 +1727,160 @@ async def delete_chore(chore_id: str, authorization: Optional[str] = Header(None
         raise HTTPException(status_code=404, detail="Chore not found")
     
     return {"message": "Chore deleted"}
+
+# ============= SLEEP TRACKER ENDPOINTS =============
+
+@api_router.post("/sleep/log", response_model=Sleep)
+async def log_sleep(sleep_data: SleepCreate, authorization: Optional[str] = Header(None), request: Request = None):
+    """Log a sleep session"""
+    user_id = await get_current_user(authorization, request)
+    
+    # Calculate duration
+    duration = (sleep_data.wake_time - sleep_data.bedtime).total_seconds() / 3600
+    
+    sleep_id = f"sleep_{uuid.uuid4().hex[:12]}"
+    sleep = {
+        "sleep_id": sleep_id,
+        "user_id": user_id,
+        "bedtime": sleep_data.bedtime,
+        "wake_time": sleep_data.wake_time,
+        "duration_hours": round(duration, 2),
+        "quality": sleep_data.quality,
+        "notes": sleep_data.notes or "",
+        "felt_rested": sleep_data.felt_rested if sleep_data.felt_rested is not None else False,
+        "date": sleep_data.wake_time.strftime("%Y-%m-%d"),
+        "created_at": datetime.now(timezone.utc)
+    }
+    
+    await db.sleep_logs.insert_one(sleep)
+    return Sleep(**sleep)
+
+@api_router.get("/sleep/stats")
+async def get_sleep_stats(authorization: Optional[str] = Header(None), request: Request = None):
+    """Get sleep statistics"""
+    user_id = await get_current_user(authorization, request)
+    
+    # Get last 7 days
+    seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
+    
+    logs = await db.sleep_logs.find(
+        {
+            "user_id": user_id,
+            "created_at": {"$gte": seven_days_ago}
+        },
+        {"_id": 0}
+    ).sort("wake_time", -1).to_list(1000)
+    
+    if not logs:
+        return {
+            "average_duration": 0,
+            "average_quality": 0,
+            "total_nights": 0,
+            "rested_percentage": 0,
+            "recent_logs": [],
+            "consistency_score": 0
+        }
+    
+    # Calculate stats
+    avg_duration = sum(log["duration_hours"] for log in logs) / len(logs)
+    avg_quality = sum(log["quality"] for log in logs) / len(logs)
+    rested_count = sum(1 for log in logs if log.get("felt_rested", False))
+    rested_percentage = int((rested_count / len(logs)) * 100)
+    
+    # Calculate consistency (how similar are bedtimes)
+    bedtimes = [log["bedtime"] for log in logs]
+    if len(bedtimes) > 1:
+        # Convert to minutes from midnight
+        bedtime_minutes = [(bt.hour * 60 + bt.minute) for bt in bedtimes]
+        avg_bedtime = sum(bedtime_minutes) / len(bedtime_minutes)
+        variance = sum((t - avg_bedtime) ** 2 for t in bedtime_minutes) / len(bedtime_minutes)
+        # Lower variance = higher consistency (0-100 scale)
+        consistency_score = max(0, int(100 - (variance / 100)))
+    else:
+        consistency_score = 100
+    
+    # Get goal
+    goal_doc = await db.sleep_goals.find_one({"user_id": user_id}, {"_id": 0})
+    target_hours = goal_doc["target_hours"] if goal_doc else 8
+    
+    return {
+        "average_duration": round(avg_duration, 1),
+        "average_quality": round(avg_quality, 1),
+        "total_nights": len(logs),
+        "rested_percentage": rested_percentage,
+        "recent_logs": [Sleep(**log) for log in logs[:7]],
+        "consistency_score": consistency_score,
+        "target_hours": target_hours,
+        "meeting_goal": avg_duration >= target_hours if logs else False
+    }
+
+@api_router.post("/sleep/goal", response_model=SleepGoal)
+async def set_sleep_goal(goal_data: SleepGoalCreate, authorization: Optional[str] = Header(None), request: Request = None):
+    """Set sleep goals"""
+    user_id = await get_current_user(authorization, request)
+    
+    # Check if goal exists
+    existing_goal = await db.sleep_goals.find_one({"user_id": user_id}, {"_id": 0})
+    
+    if existing_goal:
+        # Update existing goal
+        await db.sleep_goals.update_one(
+            {"user_id": user_id},
+            {"$set": {
+                "target_bedtime": goal_data.target_bedtime,
+                "target_wake_time": goal_data.target_wake_time,
+                "target_hours": goal_data.target_hours
+            }}
+        )
+        existing_goal.update({
+            "target_bedtime": goal_data.target_bedtime,
+            "target_wake_time": goal_data.target_wake_time,
+            "target_hours": goal_data.target_hours
+        })
+        return SleepGoal(**existing_goal)
+    else:
+        # Create new goal
+        goal_id = f"sleepgoal_{uuid.uuid4().hex[:12]}"
+        goal = {
+            "sleep_goal_id": goal_id,
+            "user_id": user_id,
+            "target_bedtime": goal_data.target_bedtime,
+            "target_wake_time": goal_data.target_wake_time,
+            "target_hours": goal_data.target_hours,
+            "created_at": datetime.now(timezone.utc)
+        }
+        await db.sleep_goals.insert_one(goal)
+        return SleepGoal(**goal)
+
+@api_router.get("/sleep/goal")
+async def get_sleep_goal(authorization: Optional[str] = Header(None), request: Request = None):
+    """Get user's sleep goal"""
+    user_id = await get_current_user(authorization, request)
+    
+    goal = await db.sleep_goals.find_one({"user_id": user_id}, {"_id": 0})
+    if goal:
+        return SleepGoal(**goal)
+    
+    # Return default goal
+    return {
+        "sleep_goal_id": None,
+        "user_id": user_id,
+        "target_bedtime": "22:00",
+        "target_wake_time": "06:00",
+        "target_hours": 8,
+        "created_at": datetime.now(timezone.utc)
+    }
+
+@api_router.delete("/sleep/{sleep_id}")
+async def delete_sleep_log(sleep_id: str, authorization: Optional[str] = Header(None), request: Request = None):
+    """Delete a sleep log"""
+    user_id = await get_current_user(authorization, request)
+    
+    result = await db.sleep_logs.delete_one({"sleep_id": sleep_id, "user_id": user_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Sleep log not found")
+    
+    return {"message": "Sleep log deleted"}
 
 # ============= AI ENDPOINTS =============
 

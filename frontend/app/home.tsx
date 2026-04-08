@@ -90,6 +90,7 @@ export default function HomeScreen() {
     { title: 'Habits', icon: 'flame', route: '/habits', color: '#50C878', count: stats.habits },
     { title: 'Notes', icon: 'document-text', route: '/notes', color: '#FFD700', count: null },
     { title: 'Chores', icon: 'home', route: '/chores', color: '#2ECC71', count: null },
+    { title: 'Sleep', icon: 'moon', route: '/sleep', color: '#7B68EE', count: null },
     { title: 'School', icon: 'school', route: '/school', color: '#6A5ACD', count: null },
     { title: 'Mood', icon: 'happy', route: '/mood', color: '#FF69B4', count: null },
     { title: 'Exercise', icon: 'fitness', route: '/exercise', color: '#1ABC9C', count: null },

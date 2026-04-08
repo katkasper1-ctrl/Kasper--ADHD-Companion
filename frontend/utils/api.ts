@@ -137,4 +137,11 @@ export const api = {
   createChore: (data: any) => apiRequest('/chores', { method: 'POST', body: JSON.stringify(data) }),
   completeChore: (id: string) => apiRequest(`/chores/${id}/complete`, { method: 'POST' }),
   deleteChore: (id: string) => apiRequest(`/chores/${id}`, { method: 'DELETE' }),
+
+  // Sleep
+  logSleep: (data: any) => apiRequest('/sleep/log', { method: 'POST', body: JSON.stringify(data) }),
+  getSleepStats: () => apiRequest('/sleep/stats'),
+  getSleepGoal: () => apiRequest('/sleep/goal'),
+  setSleepGoal: (data: any) => apiRequest('/sleep/goal', { method: 'POST', body: JSON.stringify(data) }),
+  deleteSleepLog: (id: string) => apiRequest(`/sleep/${id}`, { method: 'DELETE' }),
 };
