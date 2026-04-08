@@ -96,6 +96,8 @@ class Medication(BaseModel):
     user_id: str
     name: str
     dosage: str
+    frequency: Optional[str] = ""  # daily, twice daily, as needed, etc.
+    instructions: Optional[str] = ""  # take with food, before bed, etc.
     times: List[str]  # ["08:00", "14:00"]
     reminders: bool = True
     created_at: datetime
@@ -103,6 +105,8 @@ class Medication(BaseModel):
 class MedicationCreate(BaseModel):
     name: str
     dosage: str
+    frequency: Optional[str] = ""
+    instructions: Optional[str] = ""
     times: List[str]
     reminders: Optional[bool] = True
 
@@ -759,6 +763,8 @@ async def create_medication(med_data: MedicationCreate, authorization: Optional[
         "user_id": user_id,
         "name": med_data.name,
         "dosage": med_data.dosage,
+        "frequency": med_data.frequency or "",
+        "instructions": med_data.instructions or "",
         "times": med_data.times,
         "reminders": med_data.reminders if med_data.reminders is not None else True,
         "created_at": datetime.now(timezone.utc)
@@ -785,6 +791,65 @@ async def delete_medication(med_id: str, authorization: Optional[str] = Header(N
         raise HTTPException(status_code=404, detail="Medication not found")
     
     return {"message": "Medication deleted"}
+
+# ============= MEDICAL PROFILE ENDPOINTS =============
+
+class EmergencyContact(BaseModel):
+    name: str
+    phone: str
+    relationship: Optional[str] = ""
+
+class MedicalProfileUpdate(BaseModel):
+    allergies: Optional[List[str]] = None
+    conditions: Optional[List[str]] = None
+    emergency_contacts: Optional[List[Dict[str, str]]] = None
+    hospital_name: Optional[str] = None
+    hospital_address: Optional[str] = None
+    hospital_phone: Optional[str] = None
+    doctor_name: Optional[str] = None
+    doctor_phone: Optional[str] = None
+    doctor_specialty: Optional[str] = None
+    blood_type: Optional[str] = None
+    insurance_info: Optional[str] = None
+
+@api_router.get("/medical-profile")
+async def get_medical_profile(authorization: Optional[str] = Header(None), request: Request = None):
+    """Get user's medical profile"""
+    user_id = await get_current_user(authorization, request)
+    profile = await db.medical_profiles.find_one({"user_id": user_id}, {"_id": 0})
+    if not profile:
+        # Return default empty profile
+        return {
+            "user_id": user_id,
+            "allergies": [],
+            "conditions": [],
+            "emergency_contacts": [],
+            "hospital_name": "",
+            "hospital_address": "",
+            "hospital_phone": "",
+            "doctor_name": "",
+            "doctor_phone": "",
+            "doctor_specialty": "",
+            "blood_type": "",
+            "insurance_info": ""
+        }
+    return profile
+
+@api_router.put("/medical-profile")
+async def update_medical_profile(data: MedicalProfileUpdate, authorization: Optional[str] = Header(None), request: Request = None):
+    """Update user's medical profile (upsert)"""
+    user_id = await get_current_user(authorization, request)
+    update_data = {k: v for k, v in data.dict().items() if v is not None}
+    update_data["user_id"] = user_id
+    update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+
+    await db.medical_profiles.update_one(
+        {"user_id": user_id},
+        {"$set": update_data},
+        upsert=True
+    )
+    profile = await db.medical_profiles.find_one({"user_id": user_id}, {"_id": 0})
+    return profile
 
 # ============= FOCUS SESSION ENDPOINTS =============
 

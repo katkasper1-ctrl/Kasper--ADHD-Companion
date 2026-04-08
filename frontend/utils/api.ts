@@ -63,6 +63,8 @@ export const api = {
   getMedications: () => apiRequest('/medications'),
   createMedication: (data: any) => apiRequest('/medications', { method: 'POST', body: JSON.stringify(data) }),
   deleteMedication: (id: string) => apiRequest(`/medications/${id}`, { method: 'DELETE' }),
+  getMedicalProfile: () => apiRequest('/medical-profile'),
+  updateMedicalProfile: (data: any) => apiRequest('/medical-profile', { method: 'PUT', body: JSON.stringify(data) }),
 
   // Focus Sessions
   startFocusSession: (data: any) => apiRequest('/focus/start', { method: 'POST', body: JSON.stringify(data) }),
